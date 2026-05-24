@@ -1,0 +1,81 @@
+export const lightTheme = {
+  bg: "#F5F7F5",
+  surface: "#FFFFFF",
+  surfaceSoft: "#F0F3F0",
+  surfaceAlt: "#E8EBE8",
+  neutral: "#7D867B",
+  text: "#0F1A11",
+  textMuted: "#4B564C",
+  textLight: "#7D867B",
+  line: "rgba(125, 134, 123, 0.12)",
+  lineMedium: "rgba(125, 134, 123, 0.25)",
+  primary: "#2E7D32",
+  primaryDark: "#1B5E20",
+  primaryLight: "#E8F5E9",
+  primarySoft: "rgba(46, 125, 50, 0.1)",
+  secondary: "#FFB300",
+  secondaryDark: "#F57F17",
+  secondaryLight: "#FFF8E1",
+  secondarySoft: "rgba(255, 179, 0, 0.12)",
+  tertiary: "#81C784",
+  tertiaryLight: "#E8F5E9",
+  tertiarySoft: "rgba(129, 199, 132, 0.15)",
+  danger: "#D32F2F",
+  dangerLight: "#FFEBEE",
+  warning: "#FFB300",
+  warningLight: "#FFF8E1",
+  info: "#1976D2",
+  infoLight: "#E3F2FD",
+  success: "#2E7D32",
+  successLight: "#E8F5E9",
+};
+
+export type AppTheme = typeof lightTheme;
+
+export const darkTheme = {
+  bg: "#121412",
+  surface: "#1A1C1A",
+  surfaceSoft: "#232623",
+  surfaceAlt: "#2E312E",
+  neutral: "#7D867B",
+  text: "#E2E3E0",
+  textMuted: "#C4C7C3",
+  textLight: "#A4A9A4",
+  line: "rgba(255, 255, 255, 0.08)",
+  lineMedium: "rgba(255, 255, 255, 0.15)",
+  primary: "#81C784",
+  primaryDark: "#2E7D32",
+  primaryLight: "#1B5E20",
+  primarySoft: "rgba(129, 199, 132, 0.15)",
+  secondary: "#FFD54F",
+  secondaryDark: "#FFB300",
+  secondaryLight: "#FFF8E1",
+  secondarySoft: "rgba(255, 213, 79, 0.15)",
+  tertiary: "#81C784",
+  tertiaryLight: "#E8F5E9",
+  tertiarySoft: "rgba(129, 199, 132, 0.15)",
+  danger: "#FF8A80",
+  dangerLight: "#D32F2F",
+  warning: "#FFD54F",
+  warningLight: "rgba(255, 213, 79, 0.15)",
+  info: "#64B5F6",
+  infoLight: "rgba(100, 181, 246, 0.15)",
+  success: "#81C784",
+  successLight: "rgba(129, 199, 132, 0.15)",
+};
+
+export const theme = lightTheme; // Backward compatibility
+
+export const fonts = {
+  regular: { fontFamily: "Poppins, -apple-system, sans-serif", fontWeight: "400" as const },
+  medium: { fontFamily: "Poppins, -apple-system, sans-serif", fontWeight: "500" as const },
+  semibold: { fontFamily: "Poppins, -apple-system, sans-serif", fontWeight: "600" as const },
+  bold: { fontFamily: "Poppins, -apple-system, sans-serif", fontWeight: "700" as const },
+  extrabold: { fontFamily: "Poppins, -apple-system, sans-serif", fontWeight: "800" as const },
+  black: { fontFamily: "Poppins, -apple-system, sans-serif", fontWeight: "900" as const },
+} as const;
+
+export const roleColors = {
+  site_manager: "#FFB300",
+  citizen: "#004D40",
+} as const;

@@ -1,0 +1,36 @@
+{
+  "name": "damayan-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "@tailwindcss/container-queries": "latest",
+    "@tailwindcss/forms": "latest",
+    "@yudiel/react-qr-scanner": "^2.6.0",
+    "autoprefixer": "latest",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.16.0",
+    "next": "^16.2.6",
+    "postcss": "8.5.12",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-qr-code": "^2.0.21",
+    "sdp": "^3.2.2",
+    "tailwindcss": "^3.4.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^20",
+    "@types/react": "18.3.28",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "postcss": "8.5.12"
+  }
+}

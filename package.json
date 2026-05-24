@@ -1,0 +1,29 @@
+{
+  "name": "damayan-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@tailwindcss/container-queries": "latest",
+    "@tailwindcss/forms": "latest",
+    "autoprefixer": "latest",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.16.0",
+    "next": "latest",
+    "postcss": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwindcss": "^3.4.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^20",
+    "@types/react": "18.3.28",
+    "typescript": "5.9.3"
+  }
+}

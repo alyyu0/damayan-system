@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Damayan Mobile",
+    "slug": "damayan-mobile",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
