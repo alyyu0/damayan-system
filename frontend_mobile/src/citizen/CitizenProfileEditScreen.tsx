@@ -62,6 +62,7 @@ export function CitizenProfileEditScreen({
   // Address (from user_profiles)
   const [address, setAddress] = useState(userProfile?.address ?? "");
   const [barangay, setBarangay] = useState(userProfile?.barangay ?? "");
+  const [municipality, setMunicipality] = useState(userProfile?.municipality ?? "");
   const [province, setProvince] = useState(userProfile?.province ?? "");
   const [regionId, setRegionId] = useState(userProfile?.assignedRegionId ?? "");
   const [regionName, setRegionName] = useState("");
@@ -147,7 +148,6 @@ export function CitizenProfileEditScreen({
           // Don't block the rest of the save
         }
       }
-
       const updated = await updateProfile(s.accessToken, {
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
@@ -155,6 +155,7 @@ export function CitizenProfileEditScreen({
         gender: gender || undefined,
         address: address.trim() || undefined,
         barangay: barangay.trim() || undefined,
+        municipality: municipality.trim() || undefined,
         province: province.trim() || undefined,
         regionId: regionId || undefined,
       });
@@ -387,6 +388,18 @@ export function CitizenProfileEditScreen({
                 value={barangay}
                 onChangeText={setBarangay}
                 placeholder="e.g. Barangay San Jose"
+                placeholderTextColor={theme.textLight}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Municipality / City</Text>
+              <TextInput
+                style={styles.input}
+                value={municipality}
+                onChangeText={setMunicipality}
+                placeholder="e.g. Manila"
                 placeholderTextColor={theme.textLight}
                 autoCapitalize="words"
               />

@@ -889,39 +889,81 @@ function DashboardPage({ incidents, units, teams, currentUser, onDispatch, onMar
         </div>
       </div>
 
-      {/* ═══ TEAM STATUS & ROLES (SHOW USER ROLES ON DASHBOARD) ═══ */}
-      <div className="dp-card dp-card-spacious">
-        <div className="dp-card-header">
-          <div>
-            <div className="dp-card-title">Team Status & User Roles</div>
-            <div className="dp-card-sub">Real-time duty status of Site Managers and coordinators</div>
+      {/* ═══ GRID FOR VOLUNTEER ROLES & TEAM STATUS ═══ */}
+      <div className="dp-dash-grid dp-dash-grid-6040" style={{ marginTop: "1.25rem" }}>
+        {/* Bayanihub Volunteer Roles */}
+        <div className="dp-card dp-card-spacious">
+          <div className="dp-card-header">
+            <div>
+              <div className="dp-card-title">Available Bayanihub Volunteer Roles</div>
+              <div className="dp-card-sub">Volunteer roles synced from the Bayanihub database</div>
+            </div>
+          </div>
+
+          <div className="dp-team-roles-list">
+            {teams.length === 0 ? (
+              <div className="dp-empty">
+                <div className="dp-empty-title">No volunteer roles available yet</div>
+              </div>
+            ) : (
+              teams.map((team, idx) => {
+                const statusColor = team.status === "Ready" || team.status === "open" || team.status === "Open" ? "var(--d-green)" : "var(--d-text-sub)";
+                return (
+                  <div key={`${team.id}-${idx}`} className="dp-team-role-item">
+                    <div className="dp-team-role-avatar" style={{ background: "rgba(21, 101, 192, 0.10)" }}>
+                      <span style={{ color: "var(--d-blue)", fontWeight: 800 }}>
+                        {team.type === "MEDIC" ? "AMB" : team.type === "FIELD" ? "FIRE" : "POL"}
+                      </span>
+                    </div>
+                    <div className="dp-team-role-info">
+                      <div className="dp-team-role-name">{team.name}</div>
+                      <div className="dp-team-role-role">{team.station} · {team.contact || "No schedule"}</div>
+                    </div>
+                    <div className="dp-team-role-status" style={{ color: statusColor }}>
+                      <span className="dp-team-role-dot" style={{ background: statusColor }} />
+                      {team.members} / {team.members + team.vehicles} filled
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
-        <div className="dp-team-roles-list">
-          {teamRoleRows.length === 0 && (
-            <div className="dp-empty">
-              <div className="dp-empty-title">No responder teams available yet</div>
+        {/* Active Responders & Teams */}
+        <div className="dp-card dp-card-spacious">
+          <div className="dp-card-header">
+            <div>
+              <div className="dp-card-title">Active Responders & Teams</div>
+              <div className="dp-card-sub">Response team status for the current cluster</div>
             </div>
-          )}
+          </div>
 
-          {teamRoleRows.map((person) => (
-            <div key={`${person.name}-${person.role}`} className="dp-team-role-item">
-              <div className="dp-team-role-avatar" style={{ background: person.color + "15" }}>
-                <span style={{ color: person.color, fontWeight: 800 }}>
-                  {person.name.split(" ").map(n => n[0]).join("")}
-                </span>
+          <div className="dp-team-roles-list">
+            {teamRoleRows.length === 0 ? (
+              <div className="dp-empty">
+                <div className="dp-empty-title">No responder teams available yet</div>
               </div>
-              <div className="dp-team-role-info">
-                <div className="dp-team-role-name">{person.name}</div>
-                <div className="dp-team-role-role">{person.role}</div>
-              </div>
-              <div className="dp-team-role-status" style={{ color: person.color }}>
-                <span className="dp-team-role-dot" style={{ background: person.color }} />
-                {person.duty}
-              </div>
-            </div>
-          ))}
+            ) : (
+              teamRoleRows.map((person) => (
+                <div key={`${person.name}-${person.role}`} className="dp-team-role-item">
+                  <div className="dp-team-role-avatar" style={{ background: person.color + "15" }}>
+                    <span style={{ color: person.color, fontWeight: 800 }}>
+                      {person.name.split(" ").map(n => n[0]).join("")}
+                    </span>
+                  </div>
+                  <div className="dp-team-role-info">
+                    <div className="dp-team-role-name">{person.name}</div>
+                    <div className="dp-team-role-role">{person.role}</div>
+                  </div>
+                  <div className="dp-team-role-status" style={{ color: person.color }}>
+                    <span className="dp-team-role-dot" style={{ background: person.color }} />
+                    {person.duty}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
