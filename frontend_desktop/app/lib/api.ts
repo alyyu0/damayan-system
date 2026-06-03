@@ -206,6 +206,7 @@ export async function createGovernmentIdUploadUrl(payload: {
   fileName: string;
   applicantRole: string;
   applicantEmail: string;
+  idType?: string;
 }) {
   return request<GovernmentIdUploadUrlPayload>("/auth/uploads/government-id", {
     method: "POST",
@@ -217,11 +218,13 @@ export async function uploadGovernmentIdForSignup(payload: {
   file: File;
   applicantRole: string;
   applicantEmail: string;
+  idType?: string;
 }) {
   const uploadUrl = await createGovernmentIdUploadUrl({
     fileName: payload.file.name,
     applicantRole: payload.applicantRole,
     applicantEmail: payload.applicantEmail,
+    idType: payload.idType,
   });
 
   const uploadResponse = await fetch(uploadUrl.signedUrl, {
@@ -515,6 +518,39 @@ export async function deleteRegionAssignment(token: string, regionId: string, as
   return request<any>(`/admin/regions/${regionId}/assignments/${assignmentId}`, {
     method: 'DELETE',
   }, token);
+}
+
+export async function getShelterAssignments(token: string, centerId?: string) {
+  const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : '';
+  return request<Array<{ id: string; centerId: string; managerId: string; managerName: string; assignedAt: string | null }>>(
+    `/admin/shelter-assignments${qs}`, {}, token,
+  );
+}
+
+export async function createShelterAssignment(token: string, payload: { centerId: string; managerId: string }) {
+  return request<{ id: string; center_id: string; manager_id: string }>(
+    '/admin/shelter-assignments',
+    { method: 'POST', body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export async function deleteShelterAssignment(token: string, managerId: string) {
+  return request<void>(`/admin/shelter-assignments/${managerId}`, { method: 'DELETE' }, token);
+}
+
+export async function getAllDispatchers(token: string, search?: string) {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+  return request<Array<{ authUserId: string; name: string; role: string; assignedRegionIds: string[] }>>(
+    `/admin/dispatchers/available${qs}`, {}, token,
+  );
+}
+
+export async function getAllSiteManagers(token: string, search?: string) {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+  return request<Array<{ authUserId: string; name: string; role: string; assignedCenterId: string | null }>>(
+    `/admin/site-managers/available${qs}`, {}, token,
+  );
 }
 
 export async function getAvailableRegionUsers(token: string, regionId: string, role?: string, search?: string) {

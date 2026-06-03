@@ -69,16 +69,9 @@ export class AuthService {
 
   async signup(signupDto: SignupDto) {
     const requestedRole = signupDto.role || AppRole.CITIZEN;
-    const allowManagementSelfSignup = this.getAllowManagementSelfSignup();
-    
-    // Check if roles are allowed for self-signup
-    if (requestedRole !== AppRole.DISPATCHER && requestedRole !== AppRole.CITIZEN) {
-      if (!allowManagementSelfSignup) {
-        throw new BadRequestException(
-          'Only dispatcher and citizen roles can self-signup. Set ALLOW_ADMIN_SELF_SIGNUP=true to allow line_manager/admin self-signup.',
-        );
-      }
-    }
+
+    // All staff roles (dispatcher, site_manager/line_manager, admin) can self-signup.
+    // Admin approval (status: pending → active) is the security gate — not role restriction.
 
     const supabase = this.supabaseService.getClient() as any;
     const formattedPhone = signupDto.phone ? this.formatPhoneForStorage(signupDto.phone) : '';
@@ -872,20 +865,6 @@ export class AuthService {
     }
 
     return timingSafeEqual(leftBuffer, rightBuffer);
-  }
-
-  private getAllowManagementSelfSignup(): boolean {
-    const configuredValue = this.configService?.get<string | boolean>('ALLOW_ADMIN_SELF_SIGNUP');
-
-    if (typeof configuredValue === 'boolean') {
-      return configuredValue;
-    }
-
-    if (typeof configuredValue === 'string') {
-      return configuredValue.toLowerCase() === 'true';
-    }
-
-    return String(process.env.ALLOW_ADMIN_SELF_SIGNUP ?? 'false').toLowerCase() === 'true';
   }
 
   private buildGovernmentIdObjectPath(

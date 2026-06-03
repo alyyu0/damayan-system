@@ -424,7 +424,9 @@ export class RegionsService {
 
     if (profilesError) throw new NotFoundException(profilesError.message);
 
-    const profileMap = new Map(((profiles ?? []) as any).map((p: any) => [p.auth_user_id, p]));
+    const profileMap = new Map<string, { first_name: string | null; last_name: string | null }>(
+      ((profiles ?? []) as any[]).map((p: any) => [p.auth_user_id as string, p]),
+    );
 
     return assignments.map((a) => {
       const profile = profileMap.get(a.auth_user_id);
@@ -457,7 +459,8 @@ export class RegionsService {
 
     let query = supabase
       .from('user_profiles')
-      .select('auth_user_id, first_name, last_name, role, assigned_region_id')
+      .select('auth_user_id, first_name, last_name, role, assigned_region_id, status')
+      .eq('status', 'active')  // only approved (active) accounts can be assigned
       .order('first_name', { ascending: true });
 
     if (role === 'site_manager') {
@@ -467,13 +470,12 @@ export class RegionsService {
     }
 
     if (assignedIds.length) {
-      // exclude already assigned users
+      // exclude users already assigned to this region
       query = query.not('auth_user_id', 'in', `(${assignedIds.map((id: string) => `'${id}'`).join(',')})`);
     }
 
     if (search && search.trim()) {
       const s = `%${search.trim()}%`;
-      // use OR across first_name, last_name, auth_user_id
       query = query.or(`first_name.ilike.${s},last_name.ilike.${s},auth_user_id.ilike.${s}`);
     }
 
@@ -485,6 +487,80 @@ export class RegionsService {
       name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.auth_user_id,
       role: p.role,
       assignedRegionId: p.assigned_region_id,
+    }));
+  }
+
+  async findAllDispatchers(search?: string) {
+    const supabase = this.supabaseService.getClient() as any;
+
+    // Get all region assignment IDs so we can flag which dispatchers are already deployed
+    const { data: allAssignments } = await supabase
+      .from('region_assignments')
+      .select('auth_user_id, region_id');
+
+    const assignmentMap = new Map<string, string[]>();
+    for (const a of (allAssignments ?? []) as any[]) {
+      if (!a.auth_user_id) continue;
+      if (!assignmentMap.has(a.auth_user_id)) assignmentMap.set(a.auth_user_id, []);
+      assignmentMap.get(a.auth_user_id)!.push(a.region_id);
+    }
+
+    let query = supabase
+      .from('user_profiles')
+      .select('auth_user_id, first_name, last_name, role, assigned_region_id, status')
+      .eq('status', 'active')
+      .eq('role', 'dispatcher')
+      .order('first_name', { ascending: true });
+
+    if (search && search.trim()) {
+      const s = `%${search.trim()}%`;
+      query = query.or(`first_name.ilike.${s},last_name.ilike.${s},auth_user_id.ilike.${s}`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new NotFoundException(error.message);
+
+    return ((data ?? []) as any[]).map((p) => ({
+      authUserId: p.auth_user_id,
+      name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.auth_user_id,
+      role: p.role,
+      assignedRegionIds: assignmentMap.get(p.auth_user_id) ?? [],
+    }));
+  }
+
+  async findAllSiteManagers(search?: string) {
+    const supabase = this.supabaseService.getClient() as any;
+
+    // Build a map of managerId → centerId from shelter_assignments
+    const { data: allShelterAssignments } = await supabase
+      .from('shelter_assignments')
+      .select('manager_id, center_id');
+
+    const shelterMap = new Map<string, string>();
+    for (const a of (allShelterAssignments ?? []) as any[]) {
+      if (a.manager_id) shelterMap.set(a.manager_id, a.center_id);
+    }
+
+    let query = supabase
+      .from('user_profiles')
+      .select('auth_user_id, first_name, last_name, role, status')
+      .eq('status', 'active')
+      .in('role', ['site_manager', 'line_manager'])
+      .order('first_name', { ascending: true });
+
+    if (search && search.trim()) {
+      const s = `%${search.trim()}%`;
+      query = query.or(`first_name.ilike.${s},last_name.ilike.${s},auth_user_id.ilike.${s}`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new NotFoundException(error.message);
+
+    return ((data ?? []) as any[]).map((p) => ({
+      authUserId: p.auth_user_id,
+      name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.auth_user_id,
+      role: p.role,
+      assignedCenterId: shelterMap.get(p.auth_user_id) ?? null,
     }));
   }
 

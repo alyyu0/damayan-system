@@ -3,6 +3,7 @@
    Based on citizen portal aesthetic (sans-serif, same spacing,
    same structural grammar) but with admin blue color scheme.
    ============================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
 /* ── Tokens ──────────────────────────────────────────────── */
 .admin-root {
@@ -72,7 +73,7 @@
   height: 100vh;
   display: flex;
   overflow: hidden;
-  font-family: sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   line-height: 1.45;
   background: var(--admin-bg);
@@ -84,7 +85,7 @@
 .admin-root input,
 .admin-root select,
 .admin-root textarea {
-  font-family: sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 .admin-root .material-symbols-outlined {
@@ -1094,7 +1095,7 @@
   padding: 0.5rem 0;
   font-size: 0.78rem;
   color: var(--admin-text);
-  font-family: sans-serif;
+  font-family: "Inter", sans-serif;
   width: 100%;
 }
 
@@ -1107,7 +1108,7 @@
   padding: 0.5rem 0.7rem;
   font-size: 0.78rem;
   color: var(--admin-text);
-  font-family: sans-serif;
+  font-family: "Inter", sans-serif;
   outline: none;
 }
 
@@ -1254,7 +1255,7 @@
   border-radius: var(--admin-r);
   border: 1.5px solid;
   cursor: pointer;
-  font-family: sans-serif;
+  font-family: "Inter", sans-serif;
   transition: all 0.15s;
   text-align: center;
   font-size: 0.76rem;

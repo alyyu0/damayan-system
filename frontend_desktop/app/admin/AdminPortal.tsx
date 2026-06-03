@@ -31,7 +31,12 @@ import {
   createRegionAssignment,
   deleteRegionAssignment,
   getAvailableRegionUsers,
+  getAllDispatchers,
+  getAllSiteManagers,
   getRegionShelters,
+  getShelterAssignments,
+  createShelterAssignment,
+  deleteShelterAssignment,
   type AdminApprovalRecord,
 } from "../lib/api";
 import { subscribeToLiveAlerts, type LiveAlertRecord } from "../lib/supabase";
@@ -806,6 +811,11 @@ function ApprovalsPage({
   const [previewingAccountId, setPreviewingAccountId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
+  const [expandedFlags, setExpandedFlags] = useState<Set<string>>(new Set());
+  const [modalFlagsExpanded, setModalFlagsExpanded] = useState(true);
+
+  // Reset modal flags expansion when opening a new account
+  useEffect(() => { setModalFlagsExpanded(true); }, [docsTarget?.id]);
 
   // Auto-poll while the docs modal is open and verification is still in progress
   useEffect(() => {
@@ -923,46 +933,59 @@ function ApprovalsPage({
             const cardPillBorder = isCompleted ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
             return (
               <div style={{ marginTop: "0.75rem", border: "1px solid var(--admin-border)", borderRadius: "0.6rem", overflow: "hidden" }}>
-                {/* Panel header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.4rem 0.75rem", background: "var(--admin-surface-low)", borderBottom: "1px solid var(--admin-border)" }}>
+                {/* Panel header — clickable to collapse */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedFlags((prev) => {
+                    const next = new Set(prev);
+                    next.has(a.id) ? next.delete(a.id) : next.add(a.id);
+                    return next;
+                  })}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "0.4rem 0.75rem", background: "var(--admin-surface-low)", borderBottom: expandedFlags.has(a.id) ? "1px solid var(--admin-border)" : "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                >
                   <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.07em", color: "var(--admin-text-soft)" }}>ID VERIFICATION</span>
-                  <span style={{
-                    fontSize: "0.63rem", fontWeight: 600, padding: "0.12rem 0.5rem", borderRadius: "99px",
-                    background: cardPillBg, color: cardPillColor, border: `1px solid ${cardPillBorder}`,
-                  }}>
-                    {cardPillLabel}
-                  </span>
-                </div>
-                {/* Flag rows */}
-                <div style={{ padding: "0.5rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-                  {!hasSignals && (
-                    <span style={{ fontSize: "0.72rem", color: "#888", fontStyle: "italic" }}>
-                      {isCompleted ? "No signals were returned for this document." : "Verification in progress — check back shortly."}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span style={{
+                      fontSize: "0.63rem", fontWeight: 600, padding: "0.12rem 0.5rem", borderRadius: "99px",
+                      background: cardPillBg, color: cardPillColor, border: `1px solid ${cardPillBorder}`,
+                    }}>
+                      {cardPillLabel}
                     </span>
-                  )}
-                  {flags.map((flag) => (
-                    <div key={flag} style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start" }}>
-                      <span style={{ color: "#ef4444", fontWeight: 800, fontSize: "0.75rem", lineHeight: 1.6, flexShrink: 0 }}>✕</span>
-                      <div>
-                        <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#ef4444", lineHeight: 1.3 }}>{flagLabel(flag)}</div>
-                        <div style={{ fontSize: "0.67rem", color: "var(--admin-text-soft)", marginTop: "0.1rem", lineHeight: 1.4 }}>
-                          {VERIFICATION_FLAG_INFO[flag] ?? `Unrecognized issue detected (ref: ${flag})`}
+                    <span className="material-symbols-outlined" style={{ fontSize: "0.9rem", color: "var(--admin-text-soft)", transition: "transform 0.2s", transform: expandedFlags.has(a.id) ? "rotate(180deg)" : "none" }}>expand_more</span>
+                  </div>
+                </button>
+                {/* Flag rows — only shown when expanded */}
+                {expandedFlags.has(a.id) && (
+                  <div style={{ padding: "0.5rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                    {!hasSignals && (
+                      <span style={{ fontSize: "0.72rem", color: "#888", fontStyle: "italic" }}>
+                        {isCompleted ? "No signals were returned for this document." : "Verification in progress — check back shortly."}
+                      </span>
+                    )}
+                    {flags.map((flag) => (
+                      <div key={flag} style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start" }}>
+                        <span style={{ color: "#ef4444", fontWeight: 800, fontSize: "0.75rem", lineHeight: 1.6, flexShrink: 0 }}>✕</span>
+                        <div>
+                          <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#ef4444", lineHeight: 1.3 }}>{flagLabel(flag)}</div>
+                          <div style={{ fontSize: "0.67rem", color: "var(--admin-text-soft)", marginTop: "0.1rem", lineHeight: 1.4 }}>
+                            {VERIFICATION_FLAG_INFO[flag] ?? `Unrecognized issue detected (ref: ${flag})`}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                  {signals.map((signal) => (
-                    <div key={signal} style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start" }}>
-                      <span style={{ color: "#22c55e", fontWeight: 800, fontSize: "0.75rem", lineHeight: 1.6, flexShrink: 0 }}>✓</span>
-                      <div>
-                        <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#22c55e", lineHeight: 1.3 }}>{flagLabel(signal)}</div>
-                        <div style={{ fontSize: "0.67rem", color: "var(--admin-text-soft)", marginTop: "0.1rem", lineHeight: 1.4 }}>
-                          {VERIFICATION_FLAG_INFO[signal] ?? `Verified signal (ref: ${signal})`}
+                    ))}
+                    {signals.map((signal) => (
+                      <div key={signal} style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start" }}>
+                        <span style={{ color: "#22c55e", fontWeight: 800, fontSize: "0.75rem", lineHeight: 1.6, flexShrink: 0 }}>✓</span>
+                        <div>
+                          <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#22c55e", lineHeight: 1.3 }}>{flagLabel(signal)}</div>
+                          <div style={{ fontSize: "0.67rem", color: "var(--admin-text-soft)", marginTop: "0.1rem", lineHeight: 1.4 }}>
+                            {VERIFICATION_FLAG_INFO[signal] ?? `Verified signal (ref: ${signal})`}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1129,16 +1152,23 @@ function ApprovalsPage({
 
             return (
               <div style={{ marginTop: "1rem", border: "1px solid var(--admin-border)", borderRadius: "0.65rem", overflow: "hidden" }}>
-                {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 1rem", background: "var(--admin-surface-low)", borderBottom: "1px solid var(--admin-border)" }}>
+                {/* Header — clickable to collapse */}
+                <button
+                  type="button"
+                  onClick={() => setModalFlagsExpanded((v) => !v)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "0.5rem 1rem", background: "var(--admin-surface-low)", borderBottom: modalFlagsExpanded ? "1px solid var(--admin-border)" : "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                >
                   <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.07em", color: "var(--admin-text-soft)" }}>ID VERIFICATION RESULT</span>
-                  <span style={{ fontSize: "0.63rem", fontWeight: 600, padding: "0.15rem 0.6rem", borderRadius: "99px", background: statusPill.bg, color: statusPill.color, border: `1px solid ${statusPill.border}` }}>
-                    {statusPill.label}
-                  </span>
-                </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span style={{ fontSize: "0.63rem", fontWeight: 600, padding: "0.15rem 0.6rem", borderRadius: "99px", background: statusPill.bg, color: statusPill.color, border: `1px solid ${statusPill.border}` }}>
+                      {statusPill.label}
+                    </span>
+                    <span className="material-symbols-outlined" style={{ fontSize: "0.9rem", color: "var(--admin-text-soft)", transition: "transform 0.2s", transform: modalFlagsExpanded ? "rotate(180deg)" : "none" }}>expand_more</span>
+                  </div>
+                </button>
 
-                {/* Body */}
-                <div style={{ padding: "0.65rem 1rem", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                {/* Body — only shown when expanded */}
+                {modalFlagsExpanded && <div style={{ padding: "0.65rem 1rem", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
                   {notSubmitted && (
                     <p style={{ margin: 0, fontSize: "0.75rem", color: "#888", fontStyle: "italic" }}>
                       The verification system is offline or unreachable. Verification will be submitted automatically once it comes back online. Review the ID manually for now.
@@ -1196,7 +1226,7 @@ function ApprovalsPage({
                       </div>
                     </div>
                   ))}
-                </div>
+                </div>}
               </div>
             );
           })()}
@@ -3872,13 +3902,23 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
   const [newAssignUserId, setNewAssignUserId] = useState("");
   const [newAssignRole, setNewAssignRole] = useState<string>("site_manager");
   const [newAssignExpiry, setNewAssignExpiry] = useState<string | undefined>(undefined);
-  const [availableUsers, setAvailableUsers] = useState<Array<{ authUserId: string; name: string; role: string }>>([]);
+  const [availableUsers, setAvailableUsers] = useState<Array<{ authUserId: string; name: string; role: string; assignedRegionId?: string; assignedRegionIds?: string[] }>>([]);
   const [loadingAvailableUsers, setLoadingAvailableUsers] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
   const [newRegionName, setNewRegionName] = useState("");
   const [newRegionLat, setNewRegionLat] = useState<string>("14.5995");
   const [newRegionLng, setNewRegionLng] = useState<string>("120.9842");
   const [newRegionRadiusKm, setNewRegionRadiusKm] = useState<string>("2");
   const [creatingRegion, setCreatingRegion] = useState(false);
+  const [activeTab, setActiveTab] = useState<"phase" | "assignments" | "new_region">("phase");
+  const [assignSubTab, setAssignSubTab] = useState<"dispatcher" | "site_manager">("dispatcher");
+  const [shelterAssignments, setShelterAssignments] = useState<Array<{ id: string; centerId: string; managerId: string; managerName: string; assignedAt: string | null }>>([]);
+  const [loadingShelterAssignments, setLoadingShelterAssignments] = useState(false);
+  const [selectedCenterId, setSelectedCenterId] = useState("");
+  const [selectedManagerId, setSelectedManagerId] = useState("");
+  const [managerSearch, setManagerSearch] = useState("");
+  const [availableManagers, setAvailableManagers] = useState<Array<{ authUserId: string; name: string; role: string; assignedCenterId?: string | null }>>([]);
+  const [loadingManagers, setLoadingManagers] = useState(false);
 
   const handleCenterPick = useCallback((lat: number, lng: number) => {
     setNewRegionLat(lat.toFixed(6));
@@ -4002,27 +4042,102 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
     return () => { cancelled = true; };
   }, [authToken, regionId]);
 
+  // Keep role filter locked to dispatcher when on dispatcher sub-tab
   useEffect(() => {
+    if (assignSubTab === "dispatcher") setNewAssignRole("dispatcher");
+  }, [assignSubTab]);
+
+  // Load ALL dispatchers globally (centralized — no region filter needed)
+  useEffect(() => {
+    if (!authToken || assignSubTab !== "dispatcher") return;
     let cancelled = false;
-    async function loadAvailableUsers() {
-      if (!authToken || !regionId) {
-        if (!cancelled) setAvailableUsers([]);
-        return;
+    const delay = userSearch ? 300 : 0;
+    const timer = setTimeout(() => {
+      async function load() {
+        try {
+          if (!cancelled) setLoadingAvailableUsers(true);
+          const list = await getAllDispatchers(authToken, userSearch.trim() || undefined);
+          if (!cancelled) setAvailableUsers(list ?? []);
+        } catch {
+          if (!cancelled) setAvailableUsers([]);
+        } finally {
+          if (!cancelled) setLoadingAvailableUsers(false);
+        }
       }
+      void load();
+    }, delay);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [authToken, assignSubTab, userSearch, assignments.length]);
+
+  // Load shelter assignments whenever region changes or site_manager sub-tab is active
+  useEffect(() => {
+    if (!authToken || assignSubTab !== "site_manager") return;
+    let cancelled = false;
+    async function load() {
       try {
-        setLoadingAvailableUsers(true);
-        const list = await getAvailableRegionUsers(authToken, regionId, newAssignRole);
-        if (!cancelled) setAvailableUsers(list ?? []);
+        setLoadingShelterAssignments(true);
+        const list = await getShelterAssignments(authToken!);
+        // Filter to only show assignments for centers within this region's shelter list
+        if (!cancelled) setShelterAssignments(list ?? []);
       } catch {
-        if (!cancelled) setAvailableUsers([]);
+        if (!cancelled) setShelterAssignments([]);
       } finally {
-        if (!cancelled) setLoadingAvailableUsers(false);
+        if (!cancelled) setLoadingShelterAssignments(false);
       }
     }
-
-    void loadAvailableUsers();
+    void load();
     return () => { cancelled = true; };
-  }, [authToken, regionId, newAssignRole, assignments.length]);
+  }, [authToken, assignSubTab, regionId]);
+
+  // Load available site managers for assignment (active site_managers not already assigned to a shelter)
+  useEffect(() => {
+    if (!authToken || assignSubTab !== "site_manager") return;
+    let cancelled = false;
+    const delay = managerSearch ? 300 : 0;
+    const timer = setTimeout(() => {
+      async function load() {
+        try {
+          if (!cancelled) setLoadingManagers(true);
+          const list = await getAllSiteManagers(authToken!, managerSearch.trim() || undefined);
+          if (!cancelled) setAvailableManagers(list ?? []);
+        } catch {
+          if (!cancelled) setAvailableManagers([]);
+        } finally {
+          if (!cancelled) setLoadingManagers(false);
+        }
+      }
+      void load();
+    }, delay);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [authToken, assignSubTab, managerSearch, shelterAssignments.length]);
+
+  const handleCreateShelterAssignment = async () => {
+    if (!authToken) { showToast("error", "Session expired", "Please re-login."); return; }
+    if (!selectedCenterId) { showToast("error", "No center selected", "Pick an evacuation center first."); return; }
+    if (!selectedManagerId) { showToast("error", "No manager selected", "Select a site manager first."); return; }
+    try {
+      await createShelterAssignment(authToken, { centerId: selectedCenterId, managerId: selectedManagerId });
+      showToast("success", "Assigned", "Site manager assigned to evacuation center.");
+      setSelectedManagerId("");
+      setManagerSearch("");
+      const list = await getShelterAssignments(authToken);
+      setShelterAssignments(list ?? []);
+    } catch (err: any) {
+      showToast("error", "Assign failed", err?.message ?? "Unable to assign site manager.");
+    }
+  };
+
+  const handleDeleteShelterAssignment = async (managerId: string) => {
+    if (!authToken) return;
+    try {
+      await deleteShelterAssignment(authToken, managerId);
+      showToast("success", "Removed", "Site manager assignment removed.");
+      const list = await getShelterAssignments(authToken);
+      setShelterAssignments(list ?? []);
+    } catch (err: any) {
+      showToast("error", "Remove failed", err?.message ?? "Unable to remove assignment.");
+    }
+  };
 
   const handleCreateRegion = async () => {
     if (!authToken) {
@@ -4099,195 +4214,215 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
     }
   };
 
+  const selectedRegion = regions.find((r) => r.id === regionId);
+  const phaseColors: Record<string, { bg: string; color: string; border: string }> = {
+    BEFORE: { bg: "rgba(37,99,235,0.08)", color: "#2563eb", border: "rgba(37,99,235,0.25)" },
+    DURING: { bg: "rgba(220,38,38,0.08)", color: "#dc2626", border: "rgba(220,38,38,0.25)" },
+    AFTER:  { bg: "rgba(22,163,74,0.08)", color: "#16a34a", border: "rgba(22,163,74,0.25)" },
+  };
+
   return (
-    <div className="admin-page">
-      <div className="admin-page-head">
+    <div className="admin-page" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", gap: 0 }}>
+      {/* Page header */}
+      <div className="admin-page-head" style={{ flexShrink: 0, paddingBottom: "0.75rem" }}>
         <div>
           <h2>Persona Phase Controls</h2>
           <p>Set per-region calamity phase visibility for a specific persona.</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'start' }}>
-        <div>
-          <div style={{ maxWidth: '100%' }}>
-            <div className="admin-card" style={{ marginBottom: "0.9rem" }}>
-              <div className="admin-card-header">
-                <div className="admin-card-title">Create Region</div>
-              </div>
-              <div className="admin-card-body">
-                <div style={{ color: "var(--admin-text-soft)", marginBottom: 10 }}>Click on the map to pinpoint the center, then adjust the radius in kilometers.</div>
-                <RegionCenterPickerMap
-                  lat={Number(newRegionLat) || 14.5995}
-                  lng={Number(newRegionLng) || 120.9842}
-                  radiusKm={Number(newRegionRadiusKm) || 2}
-                  onChange={handleCenterPick}
-                />
-                <div className="admin-form-grid">
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Region Name</label>
-                    <input className="admin-form-input" value={newRegionName} onChange={(e) => setNewRegionName(e.target.value)} placeholder="e.g. Sampaloc Sector A" />
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Center Latitude</label>
-                    <input className="admin-form-input" value={newRegionLat} onChange={(e) => setNewRegionLat(e.target.value)} placeholder="14.5995" />
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Center Longitude</label>
-                    <input className="admin-form-input" value={newRegionLng} onChange={(e) => setNewRegionLng(e.target.value)} placeholder="120.9842" />
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Radius (km)</label>
-                    <input className="admin-form-input" type="number" min="0.1" max="100" step="0.1" value={newRegionRadiusKm} onChange={(e) => setNewRegionRadiusKm(e.target.value)} placeholder="2" />
-                  </div>
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Radius Slider</label>
-                    <input type="range" min="0.1" max="30" step="0.1" value={Number(newRegionRadiusKm) || 2} onChange={(e) => setNewRegionRadiusKm(e.target.value)} />
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.85rem" }}>
-                  <button className="admin-btn admin-btn-accent" onClick={handleCreateRegion} disabled={creatingRegion}>{creatingRegion ? "Creating..." : "Create Region"}</button>
-                </div>
-              </div>
+      {/* Region picker bar */}
+      <div className="admin-card" style={{ flexShrink: 0, marginBottom: "0.85rem" }}>
+        <div className="admin-card-body" style={{ padding: "0.65rem 1rem" }}>
+          <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <label className="admin-form-label" style={{ marginBottom: "0.3rem", display: "block" }}>Active Region</label>
+              <select className="admin-form-input" value={regionId} onChange={(e) => { setRegionId(e.target.value); setNewAssignUserId(""); setUserSearch(""); }} style={{ margin: 0 }}>
+                <option value="">Select a region...</option>
+                {regions.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}{r.currentPhase ? ` — ${r.currentPhase}` : ""}</option>
+                ))}
+              </select>
             </div>
-
-            <div className="admin-card">
-              <div className="admin-card-header">
-                <div className="admin-card-title">Region Persona Override</div>
+            {selectedRegion && (
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexShrink: 0 }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--admin-text-soft)" }}>Current phase:</span>
+                {selectedRegion.currentPhase ? (
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "0.2rem 0.65rem", borderRadius: 99, ...phaseColors[selectedRegion.currentPhase] ?? { bg: "var(--admin-surface-low)", color: "var(--admin-text)", border: "var(--admin-outline)" }, background: (phaseColors[selectedRegion.currentPhase] ?? phaseColors.BEFORE).bg, border: `1px solid ${(phaseColors[selectedRegion.currentPhase] ?? phaseColors.BEFORE).border}`, color: (phaseColors[selectedRegion.currentPhase] ?? phaseColors.BEFORE).color }}>
+                    {selectedRegion.currentPhase}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "0.75rem", color: "var(--admin-text-soft)" }}>—</span>
+                )}
               </div>
-              <div className="admin-card-body">
-                <div className="admin-form-grid">
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Region</label>
-                    <select className="admin-form-input" value={regionId} onChange={(e) => setRegionId(e.target.value)}>
-                      <option value="">Select a region...</option>
-                      {regions.map((r) => (
-                        <option key={r.id} value={r.id}>{r.name} {r.currentPhase ? `(${r.currentPhase})` : ''}</option>
-                      ))}
-                    </select>
-                  </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Persona</label>
-                    <select className="admin-form-input" value={persona} onChange={(e) => setPersona(e.target.value as AppRole)}>
-                      <option value={AppRole.ADMIN}>admin</option>
-                      <option value={AppRole.DISPATCHER}>dispatcher</option>
-                      <option value={AppRole.LINE_MANAGER}>line_manager</option>
-                      <option value={AppRole.CITIZEN}>citizen</option>
-                    </select>
-                  </div>
+      {/* Main layout: tabbed left + map sidebar right */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "0.85rem", flex: 1, minHeight: 0 }}>
 
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Phase</label>
-                    <select className="admin-form-input" value={phase} onChange={(e) => setPhase(e.target.value as any)}>
-                      <option value="BEFORE">BEFORE</option>
-                      <option value="DURING">DURING</option>
-                      <option value="AFTER">AFTER</option>
-                    </select>
-                  </div>
+        {/* Left: tabbed panel */}
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div className="admin-tabs" style={{ flexShrink: 0, marginBottom: "0.85rem" }}>
+            <button className={`admin-tab ${activeTab === "phase" ? "active" : ""}`} onClick={() => setActiveTab("phase")}>
+              Phase Override
+            </button>
+            <button className={`admin-tab ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")}>
+              Assignments{assignments.length > 0 ? ` (${assignments.length})` : ""}
+            </button>
+            <button className={`admin-tab ${activeTab === "new_region" ? "active" : ""}`} onClick={() => setActiveTab("new_region")}>
+              Create Region
+            </button>
+          </div>
 
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Visible To Assigned Users</label>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                      <input id="visible-toggle" type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
-                      <label htmlFor="visible-toggle" style={{ margin: 0, color: "var(--admin-text-soft)" }}>Show this phase state to users assigned to the region</label>
+          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+
+            {/* ── Tab: Phase Override ── */}
+            {activeTab === "phase" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                <div className="admin-card">
+                  <div className="admin-card-header"><div className="admin-card-title">Override Settings</div></div>
+                  <div className="admin-card-body">
+
+                    {/* Persona pills */}
+                    <div className="admin-form-group">
+                      <label className="admin-form-label">Persona</label>
+                      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                        {([AppRole.CITIZEN, AppRole.DISPATCHER, AppRole.LINE_MANAGER, AppRole.ADMIN] as AppRole[]).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setPersona(p)}
+                            style={{
+                              padding: "0.35rem 0.85rem",
+                              borderRadius: 99,
+                              border: persona === p ? "1.5px solid var(--admin-accent)" : "1.5px solid var(--admin-outline-strong)",
+                              background: persona === p ? "var(--admin-accent-light)" : "var(--admin-surface-low)",
+                              color: persona === p ? "var(--admin-accent)" : "var(--admin-text-soft)",
+                              fontWeight: persona === p ? 700 : 500,
+                              fontSize: "0.8rem",
+                              cursor: "pointer",
+                              transition: "all 0.15s",
+                            }}
+                          >
+                            {p === AppRole.LINE_MANAGER ? "Site Manager" : p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Phase pills */}
+                    <div className="admin-form-group">
+                      <label className="admin-form-label">Phase</label>
+                      <div style={{ display: "flex", gap: "0.4rem" }}>
+                        {(["BEFORE", "DURING", "AFTER"] as const).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setPhase(p)}
+                            style={{
+                              flex: 1,
+                              padding: "0.45rem 0",
+                              borderRadius: 10,
+                              border: phase === p ? `1.5px solid ${phaseColors[p].border}` : "1.5px solid var(--admin-outline-strong)",
+                              background: phase === p ? phaseColors[p].bg : "var(--admin-surface-low)",
+                              color: phase === p ? phaseColors[p].color : "var(--admin-text-soft)",
+                              fontWeight: phase === p ? 700 : 500,
+                              fontSize: "0.82rem",
+                              cursor: "pointer",
+                              transition: "all 0.15s",
+                            }}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Visibility toggle */}
+                    <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                      <label className="admin-form-label">Visibility</label>
+                      <button
+                        type="button"
+                        onClick={() => setVisible((v) => !v)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          padding: "0.55rem 0.85rem",
+                          borderRadius: 10,
+                          border: "1.5px solid var(--admin-outline-strong)",
+                          background: "var(--admin-surface-low)",
+                          cursor: "pointer",
+                          width: "100%",
+                          textAlign: "left",
+                        }}
+                      >
+                        {/* Toggle switch */}
+                        <span style={{
+                          display: "inline-flex",
+                          width: "2.2rem",
+                          height: "1.25rem",
+                          borderRadius: 99,
+                          background: visible ? "var(--admin-accent)" : "var(--admin-outline-strong)",
+                          position: "relative",
+                          flexShrink: 0,
+                          transition: "background 0.2s",
+                        }}>
+                          <span style={{
+                            position: "absolute",
+                            top: "0.15rem",
+                            left: visible ? "1.1rem" : "0.15rem",
+                            width: "0.95rem",
+                            height: "0.95rem",
+                            borderRadius: "50%",
+                            background: "#fff",
+                            transition: "left 0.2s",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          }} />
+                        </span>
+                        <span style={{ fontSize: "0.82rem", color: "var(--admin-text-soft)", fontWeight: 500 }}>
+                          Show this phase state to users assigned to this region
+                        </span>
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "0.6rem", marginTop: "1rem" }}>
+                      <button className="admin-btn admin-btn-accent" onClick={handleSave} disabled={saving || !regionId}>
+                        {saving ? "Saving..." : "Save Override"}
+                      </button>
+                      <button className="admin-btn admin-btn-ghost" onClick={handleLoadAudience} disabled={loadingAudience || !regionId}>
+                        {loadingAudience ? "Loading..." : "Load Audience"}
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.85rem" }}>
-                  <button className="admin-btn admin-btn-accent" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Override"}</button>
-                  <button className="admin-btn admin-btn-ghost" onClick={handleLoadAudience} disabled={loadingAudience}>{loadingAudience ? "Loading..." : "Load Audience"}</button>
-                </div>
-              </div>
-            </div>
-
-            <div className="admin-card" style={{ marginTop: "0.9rem" }}>
-              <div className="admin-card-header"><div className="admin-card-title">Audience</div></div>
-              <div className="admin-card-body">
-                {audience.length === 0 ? (
-                  <div style={{ color: "var(--admin-text-soft)" }}>No users loaded. Use "Load Audience" or save an override to populate the list.</div>
-                ) : (
-                  <div style={{ display: "grid", gap: "0.5rem" }}>
-                    {audience.map((u) => (
-                      <div key={u.authUserId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.45rem", borderRadius: "0.5rem", background: "var(--admin-surface-low)" }}>
-                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                          <div style={{ width: "2rem", height: "2rem", borderRadius: "0.4rem", background: "linear-gradient(135deg, var(--admin-accent-mid), var(--admin-accent))", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>{u.name?.[0] ?? "U"}</div>
-                          <div>
-                            <div style={{ fontWeight: 700 }}>{u.name}</div>
-                            <div style={{ fontSize: "0.75rem", color: "var(--admin-text-soft)" }}>{u.role}</div>
-                          </div>
-                        </div>
-                        <div style={{ fontSize: "0.82rem", color: "var(--admin-text-soft)" }}>{u.assignedRegionId ?? "-"}</div>
+                {/* Audience inline below */}
+                <div className="admin-card">
+                  <div className="admin-card-header">
+                    <div className="admin-card-title">Audience</div>
+                    {audience.length > 0 && <span className="admin-badge">{audience.length} users</span>}
+                  </div>
+                  <div className="admin-card-body">
+                    {audience.length === 0 ? (
+                      <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+                        No users loaded yet — save an override or click Load Audience.
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="admin-card" style={{ marginTop: "0.9rem" }}>
-              <div className="admin-card-header"><div className="admin-card-title">Region Assignments</div></div>
-              <div className="admin-card-body">
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div style={{ color: "var(--admin-text-soft)", fontSize: "0.9rem" }}>Assign available site managers or dispatchers to this region.</div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Selected Region</label>
-                    <div style={{ fontWeight: 700 }}>{regions.find((r) => r.id === regionId)?.name ?? (regionId ? regionId : "None selected")}</div>
-                  </div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Role</label>
-                    <select className="admin-form-input" value={newAssignRole} onChange={(e) => setNewAssignRole(e.target.value)}>
-                      <option value="site_manager">site_manager</option>
-                      <option value="dispatcher">dispatcher</option>
-                    </select>
-                  </div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Available Users</label>
-                    <select className="admin-form-input" value={newAssignUserId} onChange={(e) => setNewAssignUserId(e.target.value)}>
-                      <option value="">Select an available user...</option>
-                      {availableUsers.map((u) => (
-                        <option key={u.authUserId} value={u.authUserId}>
-                          {u.name} ({u.role}) - {u.authUserId}
-                        </option>
-                      ))}
-                    </select>
-                    {loadingAvailableUsers ? (
-                      <div style={{ color: "var(--admin-text-soft)", marginTop: 6 }}>Loading available users...</div>
-                    ) : availableUsers.length === 0 ? (
-                      <div style={{ color: "var(--admin-text-soft)", marginTop: 6 }}>No available users for this role in the selected region.</div>
-                    ) : null}
-                  </div>
-
-                  <div className="admin-form-group">
-                    <label className="admin-form-label">Expires At (optional)</label>
-                    <input className="admin-form-input" type="datetime-local" value={newAssignExpiry ?? ""} onChange={(e) => setNewAssignExpiry(e.target.value || undefined)} />
-                  </div>
-
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="admin-btn admin-btn-accent" onClick={handleCreateRegionAssignment}>Assign</button>
-                    <button className="admin-btn admin-btn-ghost" onClick={() => { setNewAssignUserId(""); setNewAssignExpiry(undefined); }}>Clear</button>
-                  </div>
-
-                  <div style={{ marginTop: 8 }}>
-                    {loadingAssignments ? (
-                      <div style={{ color: "var(--admin-text-soft)" }}>Loading assignments...</div>
-                    ) : assignments.length === 0 ? (
-                      <div style={{ color: "var(--admin-text-soft)" }}>No assignments for this region.</div>
                     ) : (
-                      <div style={{ display: "grid", gap: 6 }}>
-                        {assignments.map((a) => (
-                          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem", borderRadius: 6, background: "var(--admin-surface-low)" }}>
-                            <div>
-                              <div style={{ fontWeight: 700 }}>{a.name}</div>
-                              <div style={{ fontSize: "0.8rem", color: "var(--admin-text-soft)" }}>{a.role} - {a.assignedAt ? new Date(a.assignedAt).toLocaleString() : "just now"}</div>
+                      <div style={{ display: "grid", gap: "0.4rem" }}>
+                        {audience.map((u) => (
+                          <div key={u.authUserId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.45rem 0.65rem", borderRadius: "0.5rem", background: "var(--admin-surface-low)" }}>
+                            <div style={{ display: "flex", gap: "0.65rem", alignItems: "center" }}>
+                              <div style={{ width: "1.8rem", height: "1.8rem", borderRadius: "0.35rem", background: "linear-gradient(135deg, var(--admin-accent-mid), var(--admin-accent))", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "0.75rem", flexShrink: 0 }}>{u.name?.[0] ?? "U"}</div>
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{u.name}</div>
+                                <div style={{ fontSize: "0.7rem", color: "var(--admin-text-soft)" }}>{u.role}</div>
+                              </div>
                             </div>
-                            <div>
-                              <button className="admin-btn admin-btn-ghost" onClick={() => handleDeleteRegionAssignment(a.id)}>Remove</button>
-                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "var(--admin-text-soft)" }}>{u.assignedRegionId ?? "—"}</div>
                           </div>
                         ))}
                       </div>
@@ -4295,27 +4430,324 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
                   </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* ── Tab: Assignments ── */}
+            {activeTab === "assignments" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+
+                {/* Sub-tab: Dispatcher vs Site Manager */}
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {(["dispatcher", "site_manager"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setAssignSubTab(mode);
+                        setNewAssignUserId(""); setUserSearch("");
+                        setSelectedManagerId(""); setManagerSearch(""); setSelectedCenterId("");
+                        if (mode === "dispatcher") setNewAssignRole("dispatcher");
+                      }}
+                      style={{
+                        flex: 1, padding: "0.55rem 0", borderRadius: 10,
+                        border: assignSubTab === mode ? "1.5px solid var(--admin-accent-border)" : "1.5px solid var(--admin-outline-strong)",
+                        background: assignSubTab === mode ? "var(--admin-accent-light)" : "var(--admin-surface-low)",
+                        color: assignSubTab === mode ? "var(--admin-accent)" : "var(--admin-text-soft)",
+                        fontWeight: assignSubTab === mode ? 700 : 500,
+                        fontSize: "0.82rem", cursor: "pointer", transition: "all 0.15s",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "0.95rem" }}>
+                        {mode === "dispatcher" ? "local_shipping" : "home_work"}
+                      </span>
+                      {mode === "dispatcher" ? "Dispatchers" : "Site Managers"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Dispatcher sub-tab ── */}
+                {assignSubTab === "dispatcher" && (
+                  <>
+                    <div className="admin-alert info">
+                      <span className="admin-alert-icon material-symbols-outlined">info</span>
+                      <div>Dispatchers are <strong>centralized</strong> — assigning one here adds them to this region's dispatch pool. They can serve multiple regions simultaneously.</div>
+                    </div>
+
+                    <div className="admin-card">
+                      <div className="admin-card-header"><div className="admin-card-title">Add Dispatcher to Region</div></div>
+                      <div className="admin-card-body">
+                        {!regionId && (
+                          <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem" }}>Select a region from the bar above first.</div>
+                        )}
+                        {regionId && (
+                          <>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem", marginBottom: "0.65rem" }}>
+                              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                                <label className="admin-form-label">Role</label>
+                                <div style={{ padding: "0.5rem 0.75rem", borderRadius: 8, background: "var(--admin-accent-light)", border: "1px solid var(--admin-accent-border)", fontSize: "0.82rem", fontWeight: 700, color: "var(--admin-accent)" }}>
+                                  Dispatcher
+                                </div>
+                              </div>
+                              <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                                <label className="admin-form-label">Expires At (optional)</label>
+                                <input className="admin-form-input" type="datetime-local" value={newAssignExpiry ?? ""} onChange={(e) => setNewAssignExpiry(e.target.value || undefined)} />
+                              </div>
+                            </div>
+                            <div className="admin-form-group">
+                              <label className="admin-form-label">Find Dispatcher</label>
+                              <div style={{ position: "relative" }}>
+                                <span className="material-symbols-outlined" style={{ position: "absolute", left: "0.65rem", top: "50%", transform: "translateY(-50%)", fontSize: "1rem", color: "var(--admin-text-soft)", pointerEvents: "none" }}>search</span>
+                                <input className="admin-form-input" style={{ paddingLeft: "2.2rem" }} placeholder="Search by name…" value={userSearch} onChange={(e) => { setUserSearch(e.target.value); setNewAssignUserId(""); }} />
+                              </div>
+                              <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.3rem", maxHeight: "180px", overflowY: "auto" }}>
+                                {loadingAvailableUsers && <div style={{ color: "var(--admin-text-soft)", fontSize: "0.78rem", padding: "0.4rem 0" }}>Searching…</div>}
+                                {!loadingAvailableUsers && availableUsers.length === 0 && (
+                                  <div style={{ color: "var(--admin-text-soft)", fontSize: "0.78rem", padding: "0.4rem 0" }}>{userSearch ? "No dispatchers found." : "No available dispatchers for this region. Try searching by name."}</div>
+                                )}
+                                {availableUsers.map((u) => {
+                                  const isSel = newAssignUserId === u.authUserId;
+                                  const regionCount = u.assignedRegionIds?.length ?? 0;
+                                  const alreadyInThisRegion = regionId ? (u.assignedRegionIds ?? []).includes(regionId) : false;
+                                  return (
+                                    <button key={u.authUserId} type="button" onClick={() => setNewAssignUserId(isSel ? "" : u.authUserId)}
+                                      style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.45rem 0.65rem", borderRadius: 8, border: isSel ? "1.5px solid var(--admin-accent-border)" : "1.5px solid var(--admin-outline)", background: isSel ? "var(--admin-accent-light)" : "var(--admin-surface-low)", cursor: "pointer", textAlign: "left", width: "100%", transition: "all 0.12s" }}>
+                                      <div style={{ width: "1.8rem", height: "1.8rem", borderRadius: "0.35rem", background: "linear-gradient(135deg, var(--admin-accent-mid), var(--admin-accent))", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0 }}>{u.name?.[0] ?? "?"}</div>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 700, fontSize: "0.82rem", color: isSel ? "var(--admin-accent)" : "var(--admin-text)" }}>{u.name}</div>
+                                        <div style={{ fontSize: "0.7rem", color: regionCount === 0 ? "#16a34a" : "var(--admin-text-soft)" }}>
+                                          {regionCount === 0 ? "Unassigned" : `${regionCount} region${regionCount > 1 ? "s" : ""}${alreadyInThisRegion ? " · already in this region" : ""}`}
+                                        </div>
+                                      </div>
+                                      {isSel && <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "var(--admin-accent)", flexShrink: 0 }}>check_circle</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                              <button className="admin-btn admin-btn-accent" onClick={handleCreateRegionAssignment} disabled={!newAssignUserId}>Assign to Region</button>
+                              <button className="admin-btn admin-btn-ghost" onClick={() => { setNewAssignUserId(""); setNewAssignExpiry(undefined); setUserSearch(""); }}>Clear</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="admin-card">
+                      <div className="admin-card-header">
+                        <div className="admin-card-title">Dispatchers in this Region</div>
+                        {assignments.length > 0 && <span className="admin-badge">{assignments.length}</span>}
+                      </div>
+                      <div className="admin-card-body">
+                        {loadingAssignments ? (
+                          <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem" }}>Loading…</div>
+                        ) : assignments.length === 0 ? (
+                          <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem" }}>{regionId ? "No dispatchers assigned to this region yet." : "Select a region to view its dispatchers."}</div>
+                        ) : (
+                          <div style={{ display: "grid", gap: "0.4rem" }}>
+                            {assignments.map((a) => (
+                              <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0.65rem", borderRadius: 8, background: "var(--admin-surface-low)" }}>
+                                <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+                                  <div style={{ width: "1.8rem", height: "1.8rem", borderRadius: "0.35rem", background: "linear-gradient(135deg, var(--admin-accent-mid), var(--admin-accent))", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "0.75rem", flexShrink: 0 }}>{a.name?.[0] ?? "D"}</div>
+                                  <div>
+                                    <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{a.name}</div>
+                                    <div style={{ fontSize: "0.7rem", color: "var(--admin-text-soft)" }}>Dispatcher · {a.assignedAt ? new Date(a.assignedAt).toLocaleDateString() : "just now"}</div>
+                                  </div>
+                                </div>
+                                <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => handleDeleteRegionAssignment(a.id)}>Remove</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* ── Site Manager sub-tab ── */}
+                {assignSubTab === "site_manager" && (
+                  <>
+                    <div className="admin-alert info">
+                      <span className="admin-alert-icon material-symbols-outlined">info</span>
+                      <div>Site Managers are assigned to specific <strong>evacuation centers</strong>, not to regions directly. Select a center in this region, then assign a manager to it.</div>
+                    </div>
+
+                    <div className="admin-card">
+                      <div className="admin-card-header"><div className="admin-card-title">Assign to Evacuation Center</div></div>
+                      <div className="admin-card-body">
+                        {!regionId && (
+                          <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem" }}>Select a region from the bar above to see its evacuation centers.</div>
+                        )}
+                        {regionId && (
+                          <>
+                            <div className="admin-form-group">
+                              <label className="admin-form-label">Evacuation Center</label>
+                              <select className="admin-form-input" value={selectedCenterId} onChange={(e) => setSelectedCenterId(e.target.value)}>
+                                <option value="">Select a center…</option>
+                                {shelters.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                              {shelters.length === 0 && (
+                                <div style={{ color: "var(--admin-text-soft)", fontSize: "0.78rem", marginTop: 4 }}>No evacuation centers found for this region.</div>
+                              )}
+                            </div>
+
+                            <div className="admin-form-group">
+                              <label className="admin-form-label">Find Site Manager</label>
+                              <div style={{ position: "relative" }}>
+                                <span className="material-symbols-outlined" style={{ position: "absolute", left: "0.65rem", top: "50%", transform: "translateY(-50%)", fontSize: "1rem", color: "var(--admin-text-soft)", pointerEvents: "none" }}>search</span>
+                                <input className="admin-form-input" style={{ paddingLeft: "2.2rem" }} placeholder="Search by name…" value={managerSearch} onChange={(e) => { setManagerSearch(e.target.value); setSelectedManagerId(""); }} />
+                              </div>
+                              <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.3rem", maxHeight: "180px", overflowY: "auto" }}>
+                                {loadingManagers && <div style={{ color: "var(--admin-text-soft)", fontSize: "0.78rem", padding: "0.4rem 0" }}>Searching…</div>}
+                                {!loadingManagers && availableManagers.length === 0 && (
+                                  <div style={{ color: "var(--admin-text-soft)", fontSize: "0.78rem", padding: "0.4rem 0" }}>{managerSearch ? "No site managers found." : "No available site managers. Try searching by name."}</div>
+                                )}
+                                {availableManagers.map((u) => {
+                                  const isSel = selectedManagerId === u.authUserId;
+                                  const assignedCenter = u.assignedCenterId
+                                    ? shelters.find((s) => s.id === u.assignedCenterId)
+                                    : null;
+                                  const isAssigned = !!u.assignedCenterId;
+                                  return (
+                                    <button key={u.authUserId} type="button" onClick={() => !isAssigned && setSelectedManagerId(isSel ? "" : u.authUserId)}
+                                      style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.45rem 0.65rem", borderRadius: 8, border: isSel ? "1.5px solid var(--admin-accent-border)" : "1.5px solid var(--admin-outline)", background: isSel ? "var(--admin-accent-light)" : isAssigned ? "var(--admin-surface-muted)" : "var(--admin-surface-low)", cursor: isAssigned ? "not-allowed" : "pointer", textAlign: "left", width: "100%", opacity: isAssigned ? 0.65 : 1, transition: "all 0.12s" }}>
+                                      <div style={{ width: "1.8rem", height: "1.8rem", borderRadius: "0.35rem", background: "linear-gradient(135deg, #388e3c, #1b5e20)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0 }}>{u.name?.[0] ?? "?"}</div>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 700, fontSize: "0.82rem", color: isSel ? "var(--admin-accent)" : "var(--admin-text)" }}>{u.name}</div>
+                                        <div style={{ fontSize: "0.7rem", color: isAssigned ? "var(--admin-text-soft)" : "#16a34a" }}>
+                                          {isAssigned
+                                            ? `Assigned — ${assignedCenter ? assignedCenter.name : u.assignedCenterId}`
+                                            : "Unassigned"}
+                                        </div>
+                                      </div>
+                                      {isSel && <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "var(--admin-accent)", flexShrink: 0 }}>check_circle</span>}
+                                      {isAssigned && <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "var(--admin-text-soft)", flexShrink: 0 }}>block</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                              <button className="admin-btn admin-btn-accent" onClick={handleCreateShelterAssignment} disabled={!selectedCenterId || !selectedManagerId}>Assign to Center</button>
+                              <button className="admin-btn admin-btn-ghost" onClick={() => { setSelectedManagerId(""); setManagerSearch(""); setSelectedCenterId(""); }}>Clear</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="admin-card">
+                      <div className="admin-card-header">
+                        <div className="admin-card-title">Evacuation Center Assignments</div>
+                        {shelterAssignments.length > 0 && <span className="admin-badge">{shelterAssignments.length}</span>}
+                      </div>
+                      <div className="admin-card-body">
+                        {loadingShelterAssignments ? (
+                          <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem" }}>Loading…</div>
+                        ) : shelterAssignments.length === 0 ? (
+                          <div style={{ color: "var(--admin-text-soft)", fontSize: "0.85rem" }}>No site managers assigned to any evacuation center yet.</div>
+                        ) : (
+                          <div style={{ display: "grid", gap: "0.4rem" }}>
+                            {shelterAssignments.map((sa) => {
+                              const center = shelters.find((s) => s.id === sa.centerId);
+                              return (
+                                <div key={sa.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0.65rem", borderRadius: 8, background: "var(--admin-surface-low)" }}>
+                                  <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+                                    <div style={{ width: "1.8rem", height: "1.8rem", borderRadius: "0.35rem", background: "linear-gradient(135deg, #388e3c, #1b5e20)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "0.75rem", flexShrink: 0 }}>{sa.managerName?.[0] ?? "M"}</div>
+                                    <div>
+                                      <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{sa.managerName}</div>
+                                      <div style={{ fontSize: "0.7rem", color: "var(--admin-text-soft)" }}>
+                                        {center ? center.name : sa.centerId} · {sa.assignedAt ? new Date(sa.assignedAt).toLocaleDateString() : "just now"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <button className="admin-btn admin-btn-danger admin-btn-sm" onClick={() => handleDeleteShelterAssignment(sa.managerId)}>Remove</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+              </div>
+            )}
+
+            {/* ── Tab: Create Region ── */}
+            {activeTab === "new_region" && (
+              <div className="admin-card">
+                <div className="admin-card-header"><div className="admin-card-title">Create Region</div></div>
+                <div className="admin-card-body">
+                  <div style={{ color: "var(--admin-text-soft)", fontSize: "0.82rem", marginBottom: "0.75rem" }}>
+                    Click the map to set the center point, then fill in the region name and radius.
+                  </div>
+                  <RegionCenterPickerMap
+                    lat={Number(newRegionLat) || 14.5995}
+                    lng={Number(newRegionLng) || 120.9842}
+                    radiusKm={Number(newRegionRadiusKm) || 2}
+                    onChange={handleCenterPick}
+                  />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.65rem", marginTop: "0.75rem" }}>
+                    <div className="admin-form-group" style={{ gridColumn: "1 / -1" }}>
+                      <label className="admin-form-label">Region Name</label>
+                      <input className="admin-form-input" value={newRegionName} onChange={(e) => setNewRegionName(e.target.value)} placeholder="e.g. Sampaloc Sector A" />
+                    </div>
+                    <div className="admin-form-group">
+                      <label className="admin-form-label">Latitude</label>
+                      <input className="admin-form-input" value={newRegionLat} onChange={(e) => setNewRegionLat(e.target.value)} placeholder="14.5995" />
+                    </div>
+                    <div className="admin-form-group">
+                      <label className="admin-form-label">Longitude</label>
+                      <input className="admin-form-input" value={newRegionLng} onChange={(e) => setNewRegionLng(e.target.value)} placeholder="120.9842" />
+                    </div>
+                    <div className="admin-form-group">
+                      <label className="admin-form-label">Radius (km)</label>
+                      <input className="admin-form-input" type="number" min="0.1" max="100" step="0.1" value={newRegionRadiusKm} onChange={(e) => setNewRegionRadiusKm(e.target.value)} placeholder="2" />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginTop: "0.35rem" }}>
+                    <span style={{ fontSize: "0.78rem", color: "var(--admin-text-soft)", flexShrink: 0 }}>{Number(newRegionRadiusKm) || 2} km</span>
+                    <input type="range" min="0.1" max="30" step="0.1" value={Number(newRegionRadiusKm) || 2} onChange={(e) => setNewRegionRadiusKm(e.target.value)} style={{ flex: 1 }} />
+                  </div>
+                  <div style={{ marginTop: "0.85rem" }}>
+                    <button className="admin-btn admin-btn-accent" onClick={handleCreateRegion} disabled={creatingRegion}>{creatingRegion ? "Creating..." : "Create Region"}</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
 
-        <aside>
-          <div className="admin-card">
+        {/* Right: Region Directory map sidebar */}
+        <aside style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div className="admin-card" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
             <div className="admin-card-header"><div className="admin-card-title">Region Directory</div></div>
-            <div className="admin-card-body">
+            <div className="admin-card-body" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: "0.6rem" }}>
               <MiniRegionMap regionsGeo={regionsGeo} shelters={shelters} selectedRegionId={regionId} onSelectRegion={(id) => setRegionId(id)} />
-              <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto' }}>
+              <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                 {regions.length === 0 ? (
-                  <div style={{ color: 'var(--admin-text-soft)' }}>No regions found.</div>
+                  <div style={{ color: "var(--admin-text-soft)", fontSize: "0.82rem" }}>No regions found.</div>
                 ) : (
-                  <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: "grid", gap: "0.35rem" }}>
                     {regions.map((r) => (
-                      <button key={r.id} className="admin-btn admin-btn-ghost" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => setRegionId(r.id)}>
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontWeight: 700 }}>{r.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-soft)' }}>{r.currentPhase ?? ''}</div>
+                      <button
+                        key={r.id}
+                        className="admin-btn admin-btn-ghost"
+                        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0.65rem", background: r.id === regionId ? "var(--admin-accent-light)" : undefined, border: r.id === regionId ? "1px solid var(--admin-accent-border)" : undefined }}
+                        onClick={() => setRegionId(r.id)}
+                      >
+                        <div style={{ textAlign: "left" }}>
+                          <div style={{ fontWeight: 700, fontSize: "0.82rem" }}>{r.name}</div>
+                          {r.currentPhase && <div style={{ fontSize: "0.68rem", color: "var(--admin-text-soft)" }}>{r.currentPhase}</div>}
                         </div>
-                        <div style={{ fontSize: '0.82rem', color: 'var(--admin-text-soft)' }}>Select</div>
+                        {r.id === regionId && <span className="material-symbols-outlined" style={{ fontSize: "0.9rem", color: "var(--admin-accent)" }}>check_circle</span>}
                       </button>
                     ))}
                   </div>
@@ -4324,6 +4756,7 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
             </div>
           </div>
         </aside>
+
       </div>
     </div>
   );
