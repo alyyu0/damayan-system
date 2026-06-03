@@ -86,6 +86,16 @@ export class RegionsController {
     return this.regionsService.findAvailableUsers(id, role, search);
   }
 
+  @Get('dispatchers/available')
+  findAllDispatchers(@Query('search') search?: string) {
+    return this.regionsService.findAllDispatchers(search);
+  }
+
+  @Get('site-managers/available')
+  findAllSiteManagers(@Query('search') search?: string) {
+    return this.regionsService.findAllSiteManagers(search);
+  }
+
   @Post('regions/:id/assignments')
   createRegionAssignment(@Req() request: any, @Param('id') id: string, @Body() dto: CreateRegionAssignmentDto) {
     const assignedBy = request?.user?.sub ?? null;

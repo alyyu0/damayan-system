@@ -111,10 +111,24 @@ export default function UnifiedSignupPage() {
   const [selectedCityCode, setSelectedCityCode] = useState("");
 
   const [showPass, setShowPass] = useState(false);
+  const [selectedIdType, setSelectedIdType] = useState("");
   const [selectedIdFile, setSelectedIdFile] = useState<File | null>(null);
   const [selectedIdName, setSelectedIdName] = useState("No file selected");
+  const [uploadedFileKeys, setUploadedFileKeys] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const ID_TYPE_OPTIONS = [
+    { value: "philsys", label: "PhilSys National ID" },
+    { value: "passport", label: "Philippine Passport" },
+    { value: "drivers_license", label: "Driver's License" },
+    { value: "sss_umid", label: "SSS / UMID" },
+    { value: "gsis", label: "GSIS e-Card" },
+    { value: "philhealth", label: "PhilHealth ID" },
+    { value: "pagibig", label: "Pag-IBIG ID" },
+    { value: "voters_id", label: "Voter's ID" },
+    { value: "postal_id", label: "Postal ID" },
+  ];
 
   // Fetch Provinces on mount
   useEffect(() => {
@@ -192,6 +206,10 @@ export default function UnifiedSignupPage() {
         setError("Please create a password for your account.");
         return;
       }
+      if (!selectedIdType) {
+        setError("Please select the type of government ID you are uploading.");
+        return;
+      }
       if (!selectedIdFile) {
         setError("Please upload a valid Official ID before submitting.");
         return;
@@ -216,6 +234,7 @@ export default function UnifiedSignupPage() {
         file: selectedIdFile,
         applicantRole: role,
         applicantEmail: email,
+        idType: selectedIdType,
       });
 
       const formattedPhone = "0" + phone.replace(/\D/g, "").substring(2);
@@ -475,31 +494,63 @@ export default function UnifiedSignupPage() {
                 </div>
 
                 <div className="form-field">
-                  <label>Government ID (Required for Verification)</label>
-                  <div style={{ position: "relative", cursor: "pointer", marginTop: '4px' }}>
-                    <input
-                      type="file"
-                      accept=".jpg,.jpeg,.png"
-                      required
-                      style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }}
-                      onChange={(e) => {
-                        const nextFile = e.target.files?.[0] ?? null;
-                        setSelectedIdFile(nextFile);
-                        setSelectedIdName(nextFile?.name ?? "No file selected");
-                      }}
-                    />
-                    <div className={`form-upload-zone ${selectedIdName !== "No file selected" ? "form-upload-zone--selected" : ""}`}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: selectedIdName !== "No file selected" ? '#2E7D32' : '#8fa88f', display: 'block', marginBottom: '6px' }}>
-                        {selectedIdName !== "No file selected" ? 'task_alt' : 'cloud_upload'}
-                      </span>
-                      <strong style={{ display: "block", color: selectedIdName !== "No file selected" ? '#2E7D32' : '#4a5449', fontSize: '0.95rem' }}>
-                        {selectedIdName === "No file selected" ? "Click or drag to upload Official ID" : "ID Selected Successfully"}
-                      </strong>
-                      <span style={{ fontSize: "0.8rem", color: "#5f6b5e", marginTop: '2px', display: 'block' }}>
-                        {selectedIdName === "No file selected" ? "JPG or PNG • Max 5MB" : selectedIdName}
-                      </span>
+                  <label htmlFor="idType">ID Type</label>
+                  <CustomSelect
+                    icon="badge"
+                    placeholder="Select ID Type"
+                    value={selectedIdType}
+                    options={ID_TYPE_OPTIONS}
+                    onChange={(val: string) => {
+                      setSelectedIdType(val);
+                      setSelectedIdFile(null);
+                      setSelectedIdName("No file selected");
+                    }}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Government ID Photo</label>
+                  {!selectedIdType && (
+                    <div style={{ padding: '20px', borderRadius: '16px', border: '2px dashed #dde5dd', textAlign: 'center', background: '#f9fbf9' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '1.8rem', color: '#b8c8b8', display: 'block', marginBottom: '6px' }}>lock</span>
+                      <span style={{ fontSize: '0.85rem', color: '#8fa88f' }}>Select an ID type above to enable upload</span>
                     </div>
-                  </div>
+                  )}
+                  {selectedIdType && (
+                    <div style={{ position: "relative", cursor: "pointer", marginTop: '4px' }}>
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png"
+                        required
+                        style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }}
+                        onChange={(e) => {
+                          const nextFile = e.target.files?.[0] ?? null;
+                          if (!nextFile) return;
+                          const fileKey = `${nextFile.name}-${nextFile.size}`;
+                          if (uploadedFileKeys.has(fileKey)) {
+                            setError("This file has already been attached. Please select a different photo.");
+                            e.target.value = "";
+                            return;
+                          }
+                          setUploadedFileKeys((prev) => new Set(prev).add(fileKey));
+                          setSelectedIdFile(nextFile);
+                          setSelectedIdName(nextFile.name);
+                          setError(null);
+                        }}
+                      />
+                      <div className={`form-upload-zone ${selectedIdName !== "No file selected" ? "form-upload-zone--selected" : ""}`}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: selectedIdName !== "No file selected" ? '#2E7D32' : '#8fa88f', display: 'block', marginBottom: '6px' }}>
+                          {selectedIdName !== "No file selected" ? 'task_alt' : 'cloud_upload'}
+                        </span>
+                        <strong style={{ display: "block", color: selectedIdName !== "No file selected" ? '#2E7D32' : '#4a5449', fontSize: '0.95rem' }}>
+                          {selectedIdName === "No file selected" ? `Click to upload your ${ID_TYPE_OPTIONS.find(o => o.value === selectedIdType)?.label}` : "ID Selected Successfully"}
+                        </strong>
+                        <span style={{ fontSize: "0.8rem", color: "#5f6b5e", marginTop: '2px', display: 'block' }}>
+                          {selectedIdName === "No file selected" ? "JPG or PNG • Max 5MB" : selectedIdName}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
