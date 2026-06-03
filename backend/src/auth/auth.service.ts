@@ -23,6 +23,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service.js';
 import { AppRole } from '../../libs/contracts/src/roles.js';
 import { CreateGovernmentIdUploadDto } from '../uploads/dto/create-government-id-upload.dto.js';
+import { VerificationClientService } from '../verification/verification-client.service.js';
 
 interface UserProfileRow {
   id: string;
@@ -62,6 +63,8 @@ export class AuthService {
     @Inject(InAppNotificationsService)
     private readonly inAppNotificationsService: InAppNotificationsService,
     @Inject(ConfigService) private readonly configService: ConfigService,
+    @Inject(VerificationClientService)
+    private readonly verificationClientService: VerificationClientService,
   ) {}
 
   async signup(signupDto: SignupDto) {
@@ -132,6 +135,20 @@ export class AuthService {
     if (profileError) {
       throw new BadRequestException(
         `Profile creation failed: ${profileError.message}`,
+      );
+    }
+
+    // Fire-and-forget: submit government ID for OCR verification.
+    // Only for roles that require approval and only when an ID was uploaded.
+    if (
+      ([AppRole.DISPATCHER, AppRole.LINE_MANAGER] as string[]).includes(requestedRole) &&
+      signupDto.governmentIdKey
+    ) {
+      const fullName = `${signupDto.firstName} ${signupDto.lastName}`.trim();
+      void this.verificationClientService.submitGovernmentId(
+        authUser.id,
+        fullName,
+        signupDto.governmentIdKey,
       );
     }
 

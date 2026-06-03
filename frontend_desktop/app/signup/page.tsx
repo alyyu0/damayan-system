@@ -231,7 +231,7 @@ export default function UnifiedSignupPage() {
         barangay,
         municipality,
         province,
-        governmentIdKey: `${upload.bucket}/${upload.objectPath}`,
+        governmentIdKey: upload.objectPath,
         governmentIdFileName: selectedIdFile.name,
       });
 

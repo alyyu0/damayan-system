@@ -30,6 +30,7 @@ import { CreateDisasterCoverUploadDto } from '../../uploads/dto/create-disaster-
 import { CreateIncidentAttachmentUploadDto } from '../../uploads/dto/create-incident-attachment-upload.dto.js';
 import { CreateObjectViewUrlDto } from '../../uploads/dto/create-object-view-url.dto.js';
 import { CreateWarningBroadcastDto } from './dto/create-warning-broadcast.dto.js';
+import { VerificationClientService } from '../../verification/verification-client.service.js';
 
 @Injectable()
 export class AdminProxyService {
@@ -39,6 +40,7 @@ export class AdminProxyService {
     @Inject(NotificationsService) private readonly notificationsService: NotificationsService,
     @Inject(InAppNotificationsService) private readonly inAppNotificationsService: InAppNotificationsService,
     @Inject(ConfigService) private readonly configService: ConfigService,
+    @Inject(VerificationClientService) private readonly verificationClientService: VerificationClientService,
   ) {}
 
   getDashboard() {
@@ -49,7 +51,7 @@ export class AdminProxyService {
     const supabase = this.supabaseService.getClient() as any;
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('id, auth_user_id, first_name, last_name, phone, role, profile_photo_key, status, reject_reason, created_at')
+      .select('id, auth_user_id, first_name, last_name, phone, role, profile_photo_key, status, reject_reason, created_at, verification_job_id')
       .in('role', ['dispatcher', 'line_manager'])
       .in('status', ['pending', 'active', 'rejected'])
       .order('created_at', { ascending: true });
@@ -58,10 +60,41 @@ export class AdminProxyService {
       throw new BadRequestException(error.message);
     }
 
-    const approvals = await Promise.all(
-      ((data ?? []) as any[]).map(async (profile) => {
-        const authResult = await supabase.auth.admin.getUserById(profile.auth_user_id);
-        const email = authResult?.data?.user?.email ?? null;
+    const profiles = (data ?? []) as any[];
+
+    // One Auth API call to get all emails instead of N individual getUserById calls
+    const { data: { users: authUsers = [] } = {} } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    const emailByAuthId = new Map<string, string>(
+      authUsers.map((u: any) => [u.id, u.email ?? null]),
+    );
+
+    // Fetch all verification statuses in parallel (one per user that has a job)
+    const jobIds = profiles.map((p: any) => p.verification_job_id as string | null);
+    const verificationResults = await Promise.all(
+      jobIds.map((jobId) =>
+        jobId ? this.verificationClientService.getJobStatus(jobId) : Promise.resolve(null),
+      ),
+    );
+
+    // Fire-and-forget auto-submit for pending users without a job yet
+    for (const profile of profiles) {
+      if (profile.status === 'pending' && profile.profile_photo_key && !profile.verification_job_id) {
+        const fullName = `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim();
+        void this.verificationClientService.submitGovernmentId(
+          profile.auth_user_id,
+          fullName,
+          profile.profile_photo_key,
+        );
+      }
+    }
+
+    const approvals = profiles.map((profile, i) => {
+        const autoSubmitting =
+          profile.status === 'pending' &&
+          profile.profile_photo_key &&
+          !profile.verification_job_id;
+        const verification = verificationResults[i];
+        const email = emailByAuthId.get(profile.auth_user_id) ?? null;
 
         return {
           id: profile.id,
@@ -75,11 +108,35 @@ export class AdminProxyService {
           status: profile.status,
           rejectReason: profile.reject_reason,
           createdAt: profile.created_at,
+          verificationJobId: profile.verification_job_id ?? null,
+          verificationStatus: verification?.status ?? null,
+          verificationFlags: verification?.flags ?? [],
+          approvalSignals: verification?.approvalSignals ?? [],
         };
-      }),
-    );
+      });
+
 
     return approvals;
+  }
+
+  async triggerVerification(id: string) {
+    const supabase = this.supabaseService.getClient() as any;
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, auth_user_id, first_name, last_name, profile_photo_key, role, status')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw new BadRequestException(error.message);
+    if (!data) throw new NotFoundException('User profile not found');
+    if (data.status !== 'pending') throw new BadRequestException('Verification can only be triggered for pending accounts');
+    if (!data.profile_photo_key) throw new BadRequestException('No government ID on file for this account');
+
+    const fullName = `${data.first_name ?? ''} ${data.last_name ?? ''}`.trim();
+    void this.verificationClientService.submitGovernmentId(data.auth_user_id, fullName, data.profile_photo_key);
+
+    return { message: 'Verification submitted', profileId: id };
   }
 
   async approvePendingUser(id: string) {

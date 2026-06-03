@@ -5,6 +5,7 @@ import { AuthService } from './auth.service.js';
 import { SupabaseModule } from '../supabase/supabase.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { InAppNotificationsModule } from '../in-app-notifications/in-app-notifications.module.js';
+import { VerificationClientModule } from '../verification/verification-client.module.js';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { InAppNotificationsModule } from '../in-app-notifications/in-app-notific
     SupabaseModule,
     NotificationsModule,
     InAppNotificationsModule,
+    VerificationClientModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

@@ -21,6 +21,7 @@ import {
   getPendingApprovals,
   approvePendingUser,
   rejectPendingUser,
+  triggerAdminVerification,
   getRegions,
   createRegion,
   getRegionsGeo,
@@ -89,6 +90,9 @@ interface PendingAccount {
   familyMembers?: FamilyMember[];
   governmentIdKey?: string;
   profilePhotoKey?: string;
+  verificationStatus?: string | null;
+  verificationFlags?: string[];
+  approvalSignals?: string[];
 }
 
 interface QRRecord {
@@ -744,14 +748,40 @@ function OverviewPage({
   );
 }
 
-// 
+function flagLabel(s: string): string {
+  return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+const VERIFICATION_FLAG_INFO: Record<string, string> = {
+  // Red flags
+  name_mismatch:        "Name on the submitted ID does not match the registered name",
+  document_expired:     "The submitted ID has expired or is past its validity date",
+  low_confidence:       "Document could not be read with sufficient confidence — try a clearer photo",
+  face_mismatch:        "Photo on the ID does not match the applicant's uploaded photo",
+  document_unreadable:  "Document is too blurry, cropped, or obscured to read",
+  invalid_document:     "Submitted file is not a recognized government-issued ID type",
+  forgery_suspected:    "Document shows signs of tampering or digital manipulation",
+  id_type_unsupported:  "This type of government ID is not accepted for verification",
+  address_mismatch:     "Address on the ID does not match the registration address",
+  // Green signals
+  name_matches:    "Name on the submitted ID matches the registered name",
+  document_valid:  "The submitted ID is within its validity period",
+  high_confidence: "Document was read with high confidence",
+  face_match:      "Photo on the ID matches the applicant's uploaded photo",
+  clear_photo:     "Document photo is clear and fully legible",
+  address_matches: "Address on the ID matches the registration address",
+};
+
+//
 //  APPROVALS PAGE (Swimlane: Review Docs  Is Document Valid?  Approve/Reject)
-// 
+//
 function ApprovalsPage({
   accounts,
   onApprove,
   onReject,
   onPreviewPrimaryDoc,
+  onVerify,
+  onRefreshApprovals,
   addLog,
   showToast,
   dataStatus,
@@ -760,6 +790,8 @@ function ApprovalsPage({
   onApprove: (id: string) => void;
   onReject: (id: string, reason: string) => void;
   onPreviewPrimaryDoc: (account: PendingAccount) => Promise<boolean>;
+  onVerify: (id: string) => Promise<void>;
+  onRefreshApprovals: () => Promise<PendingAccount[]>;
   addLog: (type: string, msg: string, col: string) => void;
   showToast: (type: ToastItem["type"], title: string, sub?: string) => void;
   dataStatus: "live" | "unavailable";
@@ -772,6 +804,29 @@ function ApprovalsPage({
   const [rejectReason, setRejectReason] = useState("");
   const [docsTarget, setDocsTarget] = useState<PendingAccount | null>(null);
   const [previewingAccountId, setPreviewingAccountId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
+
+  // Auto-poll while the docs modal is open and verification is still in progress
+  useEffect(() => {
+    const isStillProcessing =
+      docsTarget?.status === "PENDING" &&
+      docsTarget.verificationStatus != null &&
+      docsTarget.verificationStatus !== "completed";
+
+    if (!isStillProcessing) return;
+
+    const timer = setInterval(async () => {
+      const fresh = await onRefreshApprovals();
+      const updated = fresh.find((a) => a.id === docsTarget!.id);
+      if (updated) {
+        setDocsTarget(updated);
+        if (updated.verificationStatus === "completed") clearInterval(timer);
+      }
+    }, 8000);
+
+    return () => clearInterval(timer);
+  }, [docsTarget?.id, docsTarget?.verificationStatus, onRefreshApprovals]);
 
   const pending = accounts.filter((a) => a.status === "PENDING");
   const approved = accounts.filter((a) => a.status === "APPROVED");
@@ -855,6 +910,62 @@ function ApprovalsPage({
               ))}
             </div>
           )}
+          {/* ID Verification panel — pending only */}
+          {showActions && a.verificationStatus != null && (() => {
+            const flags = a.verificationFlags ?? [];
+            const signals = a.approvalSignals ?? [];
+            const isCompleted = a.verificationStatus === "completed";
+            const isProcessingCard = a.verificationStatus === "processing";
+            const hasSignals = flags.length > 0 || signals.length > 0;
+            const cardPillLabel = isCompleted ? "Completed" : isProcessingCard ? "Processing" : "Queued";
+            const cardPillColor = isCompleted ? "#22c55e" : "#fbbf24";
+            const cardPillBg = isCompleted ? "rgba(34,197,94,0.12)" : "rgba(251,191,36,0.12)";
+            const cardPillBorder = isCompleted ? "rgba(34,197,94,0.3)" : "rgba(251,191,36,0.3)";
+            return (
+              <div style={{ marginTop: "0.75rem", border: "1px solid var(--admin-border)", borderRadius: "0.6rem", overflow: "hidden" }}>
+                {/* Panel header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.4rem 0.75rem", background: "var(--admin-surface-low)", borderBottom: "1px solid var(--admin-border)" }}>
+                  <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.07em", color: "var(--admin-text-soft)" }}>ID VERIFICATION</span>
+                  <span style={{
+                    fontSize: "0.63rem", fontWeight: 600, padding: "0.12rem 0.5rem", borderRadius: "99px",
+                    background: cardPillBg, color: cardPillColor, border: `1px solid ${cardPillBorder}`,
+                  }}>
+                    {cardPillLabel}
+                  </span>
+                </div>
+                {/* Flag rows */}
+                <div style={{ padding: "0.5rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                  {!hasSignals && (
+                    <span style={{ fontSize: "0.72rem", color: "#888", fontStyle: "italic" }}>
+                      {isCompleted ? "No signals were returned for this document." : "Verification in progress — check back shortly."}
+                    </span>
+                  )}
+                  {flags.map((flag) => (
+                    <div key={flag} style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start" }}>
+                      <span style={{ color: "#ef4444", fontWeight: 800, fontSize: "0.75rem", lineHeight: 1.6, flexShrink: 0 }}>✕</span>
+                      <div>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#ef4444", lineHeight: 1.3 }}>{flagLabel(flag)}</div>
+                        <div style={{ fontSize: "0.67rem", color: "var(--admin-text-soft)", marginTop: "0.1rem", lineHeight: 1.4 }}>
+                          {VERIFICATION_FLAG_INFO[flag] ?? `Unrecognized issue detected (ref: ${flag})`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {signals.map((signal) => (
+                    <div key={signal} style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start" }}>
+                      <span style={{ color: "#22c55e", fontWeight: 800, fontSize: "0.75rem", lineHeight: 1.6, flexShrink: 0 }}>✓</span>
+                      <div>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#22c55e", lineHeight: 1.3 }}>{flagLabel(signal)}</div>
+                        <div style={{ fontSize: "0.67rem", color: "var(--admin-text-soft)", marginTop: "0.1rem", lineHeight: 1.4 }}>
+                          {VERIFICATION_FLAG_INFO[signal] ?? `Verified signal (ref: ${signal})`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {a.rejectReason && (
             <div style={{ marginTop: "0.6rem", padding: "0.5rem 0.75rem", background: "var(--admin-red-bg)", border: "1px solid var(--admin-red-border)", borderRadius: "0.5rem", fontSize: "0.75rem", color: "var(--admin-red)" }}>
               <strong>Rejection reason:</strong> {a.rejectReason}
@@ -997,6 +1108,98 @@ function ApprovalsPage({
               </div>
             ))}
           </div>
+
+          {/* Verification results — always shown for pending accounts */}
+          {docsTarget.status === "PENDING" && (() => {
+            const flags = docsTarget.verificationFlags ?? [];
+            const signals = docsTarget.approvalSignals ?? [];
+            const status = docsTarget.verificationStatus;
+            const notSubmitted = status == null;
+            const isCompleted = status === "completed";
+            const hasSignals = flags.length > 0 || signals.length > 0;
+
+            const isProcessing = status === "processing";
+            const statusPill = notSubmitted
+              ? { label: "Not submitted", bg: "rgba(156,163,175,0.12)", color: "#9ca3af", border: "rgba(156,163,175,0.3)" }
+              : isCompleted
+              ? { label: "Completed", bg: "rgba(34,197,94,0.12)", color: "#22c55e", border: "rgba(34,197,94,0.3)" }
+              : isProcessing
+              ? { label: "Processing", bg: "rgba(251,191,36,0.12)", color: "#fbbf24", border: "rgba(251,191,36,0.3)" }
+              : { label: "Queued", bg: "rgba(156,163,175,0.12)", color: "#9ca3af", border: "rgba(156,163,175,0.3)" };
+
+            return (
+              <div style={{ marginTop: "1rem", border: "1px solid var(--admin-border)", borderRadius: "0.65rem", overflow: "hidden" }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 1rem", background: "var(--admin-surface-low)", borderBottom: "1px solid var(--admin-border)" }}>
+                  <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.07em", color: "var(--admin-text-soft)" }}>ID VERIFICATION RESULT</span>
+                  <span style={{ fontSize: "0.63rem", fontWeight: 600, padding: "0.15rem 0.6rem", borderRadius: "99px", background: statusPill.bg, color: statusPill.color, border: `1px solid ${statusPill.border}` }}>
+                    {statusPill.label}
+                  </span>
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: "0.65rem 1rem", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                  {notSubmitted && (
+                    <p style={{ margin: 0, fontSize: "0.75rem", color: "#888", fontStyle: "italic" }}>
+                      The verification system is offline or unreachable. Verification will be submitted automatically once it comes back online. Review the ID manually for now.
+                    </p>
+                  )}
+                  {!notSubmitted && !hasSignals && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.75rem", color: "#888", fontStyle: "italic", flex: 1 }}>
+                        {isCompleted
+                          ? "No signals were returned for this document."
+                          : isProcessing
+                          ? "The verification worker is processing the document. This can take a few minutes — click Refresh Status to check."
+                          : "Document is queued for verification — check back shortly."}
+                      </p>
+                      {!isCompleted && (
+                        <button
+                          className="admin-btn admin-btn-ghost admin-btn-sm"
+                          disabled={refreshingStatus}
+                          style={{ flexShrink: 0 }}
+                          onClick={async () => {
+                            setRefreshingStatus(true);
+                            try {
+                              const fresh = await onRefreshApprovals();
+                              const updated = fresh.find((a) => a.id === docsTarget.id);
+                              if (updated) setDocsTarget(updated);
+                            } finally {
+                              setRefreshingStatus(false);
+                            }
+                          }}
+                        >
+                          {refreshingStatus ? "Checking…" : "Refresh Status"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {flags.map((flag) => (
+                    <div key={flag} style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", padding: "0.5rem 0.75rem", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: "0.5rem" }}>
+                      <span style={{ color: "#ef4444", fontWeight: 800, fontSize: "1rem", lineHeight: 1.4, flexShrink: 0 }}>✕</span>
+                      <div>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#ef4444" }}>{flagLabel(flag)}</div>
+                        <div style={{ fontSize: "0.7rem", color: "var(--admin-text-soft)", marginTop: "0.15rem", lineHeight: 1.5 }}>
+                          {VERIFICATION_FLAG_INFO[flag] ?? `Unrecognized issue (ref: ${flag})`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {signals.map((signal) => (
+                    <div key={signal} style={{ display: "flex", gap: "0.65rem", alignItems: "flex-start", padding: "0.5rem 0.75rem", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.18)", borderRadius: "0.5rem" }}>
+                      <span style={{ color: "#22c55e", fontWeight: 800, fontSize: "1rem", lineHeight: 1.4, flexShrink: 0 }}>✓</span>
+                      <div>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#22c55e" }}>{flagLabel(signal)}</div>
+                        <div style={{ fontSize: "0.7rem", color: "var(--admin-text-soft)", marginTop: "0.15rem", lineHeight: 1.5 }}>
+                          {VERIFICATION_FLAG_INFO[signal] ?? `Verified signal (ref: ${signal})`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </Modal>
       )}
 
@@ -3481,6 +3684,9 @@ function mapApprovalToAccount(record: AdminApprovalRecord): PendingAccount {
     rejectReason: record.rejectReason ?? record.reject_reason ?? undefined,
     governmentIdKey: record.governmentIdKey ?? undefined,
     profilePhotoKey: record.profile_photo_key ?? undefined,
+    verificationStatus: record.verificationStatus ?? null,
+    verificationFlags: record.verificationFlags ?? [],
+    approvalSignals: record.approvalSignals ?? [],
   };
 }
 
@@ -4328,6 +4534,34 @@ export default function AdminPortal() {
       });
   }, [accounts, addLog]);
 
+  const refreshApprovals = useCallback(async (): Promise<PendingAccount[]> => {
+    const stored = loadSession();
+    if (!stored?.accessToken) return [];
+    try {
+      const result = await getPendingApprovals(stored.accessToken);
+      const mapped = result.map(mapApprovalToAccount);
+      setAccounts(mapped);
+      return mapped;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const handleVerify = useCallback(async (id: string) => {
+    const stored = loadSession();
+    if (!stored?.accessToken) {
+      showToast("error", "Session expired", "Please log in again.");
+      return;
+    }
+    try {
+      await triggerAdminVerification(stored.accessToken, id);
+      showToast("info", "Verification submitted", "Results will appear here once the check completes.");
+      setAccounts((p) => p.map((a) => a.id === id ? { ...a, verificationStatus: "processing" } : a));
+    } catch {
+      showToast("error", "Verification failed", "Could not submit the document for verification.");
+    }
+  }, [showToast]);
+
   const sendBroadcast = useCallback(async () => {
     const message = broadcastMsg.trim();
     if (!message) return;
@@ -4374,7 +4608,9 @@ export default function AdminPortal() {
     // Use the first uploaded doc with metadata; fall back to governmentIdKey if docs are old-shape
     const primaryDoc = account.docs.find((d) => d.objectPath);
     const bucket = primaryDoc?.bucket ?? "government-ids";
-    const objectPath = primaryDoc?.objectPath ?? account.governmentIdKey;
+    const rawKey = primaryDoc?.objectPath ?? account.governmentIdKey ?? "";
+    // Strip leading "bucket/" prefix — legacy signups stored key as "bucket/objectPath"
+    const objectPath = rawKey.startsWith(`${bucket}/`) ? rawKey.slice(bucket.length + 1) : rawKey;
 
     if (!objectPath) {
       showToast("warning", "No Document", "No government ID file is attached to this account.");
@@ -4609,6 +4845,8 @@ export default function AdminPortal() {
               onApprove={handleApprove}
               onReject={handleReject}
               onPreviewPrimaryDoc={handlePreviewPrimaryDoc}
+              onVerify={handleVerify}
+              onRefreshApprovals={refreshApprovals}
               addLog={addLog}
               showToast={showToast}
               dataStatus={approvalsDataStatus}

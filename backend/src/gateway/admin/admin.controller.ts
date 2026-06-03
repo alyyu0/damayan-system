@@ -372,6 +372,11 @@ export class AdminController {
     return this.adminProxyService.createObjectViewUrl(createObjectViewUrlDto);
   }
 
+  @Post('approvals/:id/verify')
+  triggerVerification(@Param('id') id: string) {
+    return this.adminProxyService.triggerVerification(id);
+  }
+
   @Get('check-ins')
   findCheckIns(@Query('search') search?: string) {
     return this.adminProxyService.findCheckIns(search);

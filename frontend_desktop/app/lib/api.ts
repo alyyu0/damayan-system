@@ -56,6 +56,10 @@ export interface AdminApprovalRecord {
   reject_reason?: string | null;
   createdAt?: string;
   created_at?: string;
+  verificationJobId?: string | null;
+  verificationStatus?: string | null;
+  verificationFlags?: string[];
+  approvalSignals?: string[];
 }
 
 export interface AdminSystemHealthRecord {
@@ -932,6 +936,12 @@ export async function getFamilies(token: string) {
 
 export async function getPendingApprovals(token: string) {
   return request<AdminApprovalRecord[]>("/admin/approvals", {}, token);
+}
+
+export async function triggerAdminVerification(token: string, id: string) {
+  return request<{ message: string; profileId: string }>(`/admin/approvals/${id}/verify`, {
+    method: "POST",
+  }, token);
 }
 
 export async function approvePendingUser(token: string, id: string) {

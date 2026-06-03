@@ -23,7 +23,11 @@ export default function CitizenPortalPage() {
         setProfile(data);
         if (data.profilePhotoKey) {
           try {
-            const url = await getFileViewUrl(stored.accessToken, "government-ids", data.profilePhotoKey);
+            const photoBucket = "government-ids";
+            const rawKey = data.profilePhotoKey ?? "";
+            // Strip leading "bucket/" prefix — legacy signups stored key as "bucket/objectPath"
+            const photoKey = rawKey.startsWith(`${photoBucket}/`) ? rawKey.slice(photoBucket.length + 1) : rawKey;
+            const url = await getFileViewUrl(stored.accessToken, photoBucket, photoKey);
             setProfilePhotoUrl(url);
           } catch { /* photo unavailable, use initials */ }
         }

@@ -9,9 +9,10 @@ import { RolesGuard } from '../../common/auth/roles.guard.js';
 import { SupabaseModule } from '../../supabase/supabase.module.js';
 import { NotificationsModule } from '../../notifications/notifications.module.js';
 import { InAppNotificationsModule } from '../../in-app-notifications/in-app-notifications.module.js';
+import { VerificationClientModule } from '../../verification/verification-client.module.js';
 
 @Module({
-  imports: [GatewayClientsModule, SupabaseModule, NotificationsModule, InAppNotificationsModule, JwtModule.register({})],
+  imports: [GatewayClientsModule, SupabaseModule, NotificationsModule, InAppNotificationsModule, VerificationClientModule, JwtModule.register({})],
   controllers: [AdminController],
   providers: [SiteManagerProxyService, AdminProxyService, JwtAuthGuard, RolesGuard],
 })
