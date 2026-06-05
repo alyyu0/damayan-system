@@ -29,6 +29,9 @@ function extractHostFromUri(uri?: string | null): string | null {
 }
 
 function getExpoHostUri(): string | null {
+  // expo-constants may not be available in all build configurations
+  if (!Constants) return null;
+
   const expoConstants = Constants as typeof Constants & {
     expoGoConfig?: { debuggerHost?: string | null };
     manifest?: { debuggerHost?: string | null; hostUri?: string | null };
@@ -836,6 +839,53 @@ export async function removeFamilyGroupMember(token: string, qrCodeId: string): 
 
 export async function deleteFamilyGroup(token: string): Promise<void> {
   await request<{ ok: boolean }>("/citizen/family-group", { method: "DELETE" }, token);
+}
+
+// ─── Citizen self check-in / check-out (uses site-manager endpoints; CITIZEN role is allowed) ────
+
+/** Citizen scans into a shelter using their personal QR code. */
+export async function citizenSelfCheckIn(token: string, qrCode: string): Promise<CheckInRecord | null> {
+  try {
+    return await request<CheckInRecord>("/site-manager/check-ins/scan", {
+      method: "POST",
+      body: JSON.stringify({ qrCode }),
+    }, token);
+  } catch {
+    return null;
+  }
+}
+
+/** Citizen checks out of a shelter using their personal QR code. */
+export async function checkOutByQrCode(token: string, qrCode: string): Promise<void> {
+  try {
+    await request<any>("/site-manager/check-ins/checkout-by-qr", {
+      method: "POST",
+      body: JSON.stringify({ qrCode }),
+    }, token);
+  } catch {
+    // non-fatal — citizen is still physically leaving
+  }
+}
+
+/** Check out a whole family group. */
+export async function checkOutFamilyGroup(token: string, familyQrCode: string): Promise<void> {
+  try {
+    await request<any>("/site-manager/check-ins/family-checkout", {
+      method: "POST",
+      body: JSON.stringify({ familyQrCode }),
+    }, token);
+  } catch {
+    // non-fatal
+  }
+}
+
+/** Get active/all disaster events (citizen-accessible via site-manager route). */
+export async function getActiveDisasterEvents(token: string): Promise<DisasterEvent[]> {
+  try {
+    return await request<DisasterEvent[]>("/site-manager/disaster-events", {}, token);
+  } catch {
+    return [];
+  }
 }
 
 /** Look up a citizen by their individual QR code — used when scanning to preview info before adding. */

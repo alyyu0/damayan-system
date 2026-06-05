@@ -7,7 +7,9 @@ export interface EvacCenter {
   name: string;
   latitude: number;
   longitude: number;
-  status: "Open" | "Full" | "Closed";
+  status: string;
+  capacity?: number;
+  currentOccupancy?: number;
 }
 
 export interface CitizenLiveMapProps {

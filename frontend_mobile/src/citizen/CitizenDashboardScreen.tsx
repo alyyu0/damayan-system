@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
-import { View, StyleSheet, Pressable, Text, Modal, Platform, Image } from "react-native";
-import Constants from "expo-constants";
+import { useState, useEffect, useRef, type ComponentProps } from "react";
+import { View, StyleSheet, Pressable, Text, Modal, Platform, Image, StatusBar as RNStatusBar } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { lightTheme, darkTheme, fonts } from "../theme";
@@ -26,7 +25,7 @@ interface CitizenDashboardScreenProps {
 }
 
 export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDashboardScreenProps>) {
-  const { citizenPhase: systemPhase } = useSystemPhase();
+  const { citizenPhase: systemPhase, refreshPhase } = useSystemPhase();
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
   const phase = phaseOverride || systemPhase;
 
@@ -87,10 +86,24 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
   }
 
   useEffect(() => {
-    loadUserData();
+    loadUserData().then(() => {
+      // Re-fetch phase with persona context so regional overrides are applied
+      // immediately after the citizen's session (and assignedRegionId) is known.
+      void refreshPhase();
+    });
   }, []);
 
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications(userId, token);
+
+  // ── Phase change announcement ─────────────────────────────────────────────
+  const prevPhaseRef = useRef<Phase | null>(null);
+  const [phaseAnnouncement, setPhaseAnnouncement] = useState<Phase | null>(null);
+  useEffect(() => {
+    if (prevPhaseRef.current !== null && prevPhaseRef.current !== phase) {
+      setPhaseAnnouncement(phase);
+    }
+    prevPhaseRef.current = phase;
+  }, [phase]);
 
   const theme = isDarkMode ? darkTheme : lightTheme;
 
@@ -122,32 +135,33 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
       .join("")
       .toUpperCase() || "C";
 
-  // ── Phase-dependent display values (extracted to avoid nested ternaries) ──
-  const phaseColor =
-    phase === "before" ? theme.primary : phase === "during" ? theme.warning : theme.info;
-
-  const phaseIconName: React.ComponentProps<typeof Ionicons>["name"] =
-    phase === "before"
-      ? "shield-checkmark"
-      : phase === "during"
-      ? "warning"
-      : "checkmark-done-circle";
-
-  const phaseLabel =
-    phase === "before" ? "PREPAREDNESS" : phase === "during" ? "RESPONSE MODE" : "RECOVERY PHASE";
-
-  const phaseIndicatorBg = isDarkMode
-    ? theme.surfaceAlt
-    : phase === "before"
-    ? "#eef1ea"
-    : phase === "during"
-    ? "#fff4e5"
-    : "#eef2ff";
-
-  const orbColor =
-    phase === "before" ? theme.primary : phase === "during" ? theme.warning : theme.info;
+  // ── Phase-dependent display values — lookup avoids nested ternaries ──────────
+  const PHASE_DISPLAY: Record<Phase, {
+    color: string;
+    icon: ComponentProps<typeof Ionicons>["name"];
+    label: string;
+    lightBg: string;
+  }> = {
+    before: { color: theme.primary,  icon: "shield-checkmark",       label: "PREPAREDNESS",  lightBg: "#eef1ea" },
+    during: { color: theme.warning,  icon: "warning",                label: "RESPONSE MODE", lightBg: "#fff4e5" },
+    after:  { color: theme.info,     icon: "checkmark-done-circle",  label: "RECOVERY PHASE", lightBg: "#eef2ff" },
+  };
+  const pd = PHASE_DISPLAY[phase];
+  const phaseColor = pd.color;
+  const phaseIconName = pd.icon;
+  const phaseLabel = pd.label;
+  const phaseIndicatorBg = isDarkMode ? theme.surfaceAlt : pd.lightBg;
+  const orbColor = pd.color;
 
   const citizenDisplayName = displayName === "Citizen" ? undefined : displayName;
+
+  // ── Announcement modal content — lookup avoids nested ternaries ────────────
+  const ANNOUNCEMENT: Record<Phase, { bg: string; icon: ComponentProps<typeof Ionicons>["name"]; title: string; body: string }> = {
+    during: { bg: "#BA1A1A", icon: "alert-circle",      title: "EMERGENCY MODE ACTIVATED",  body: "An emergency has been declared. Please follow evacuation instructions and use the Safety Map tab." },
+    after:  { bg: "#2E7D32", icon: "checkmark-circle",  title: "ALL CLEAR — RECOVERY PHASE", body: "Authorities have declared the situation safe. Proceed to the Recovery Flow in your dashboard." },
+    before: { bg: "#1565C0", icon: "shield-checkmark",  title: "STANDBY — PREPAREDNESS MODE", body: "The system has returned to preparedness mode. Continue reviewing your safety checklist." },
+  };
+  const announcementContent = phaseAnnouncement ? ANNOUNCEMENT[phaseAnnouncement] : null;
 
   return (
     <View style={styles.container}>
@@ -264,6 +278,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
                     qrCodeId={citizenProfile?.qrCodeId}
                     registrationType={citizenProfile?.registrationType}
                     profilePhotoUrl={profilePhotoUrl ?? undefined}
+                    session={session}
                   />
                 )}
               </View>
@@ -273,17 +288,17 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
                 onBack={() => { setPhaseOverride(null); setTargetStep("dashboard"); setActiveNav("Overview"); }}
                 initialStep={targetStep === "report_incident" ? "report_incident" : "decision"}
                 session={session}
-                authUser={authUser}
                 qrCodeId={citizenProfile?.qrCodeId}
+                notifications={notifications}
               />
             )}
             {phase === "after" && (
               <CitizenAfterScreen
-                onBack={() => {
-                  setActiveNav("Overview");
-                  setTargetStep("dashboard");
-                  setPhaseOverride(null);
-                }}
+                onBack={() => { setActiveNav("Overview"); setTargetStep("dashboard"); setPhaseOverride(null); }}
+                qrCodeId={citizenProfile?.qrCodeId}
+                citizenName={citizenDisplayName}
+                session={session}
+                notifications={notifications}
               />
             )}
           </>
@@ -335,6 +350,33 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
           </View>
         </View>
       )}
+
+      {/* Phase Change Announcement Modal */}
+      <Modal visible={phaseAnnouncement !== null} transparent animationType="fade">
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: 32 }}
+          onPress={() => setPhaseAnnouncement(null)}
+        >
+          <View style={{
+            backgroundColor: announcementContent?.bg ?? "#1565C0",
+            borderRadius: 32, padding: 32, alignItems: "center", gap: 16, width: "100%", maxWidth: 360,
+          }}>
+            <Ionicons name={announcementContent?.icon ?? "shield-checkmark"} size={48} color="#fff" />
+            <Text style={{ ...fonts.black, fontSize: 22, color: "#fff", textAlign: "center", letterSpacing: -0.5 }}>
+              {announcementContent?.title}
+            </Text>
+            <Text style={{ ...fonts.medium, fontSize: 14, color: "rgba(255,255,255,0.85)", textAlign: "center", lineHeight: 22 }}>
+              {announcementContent?.body}
+            </Text>
+            <Pressable
+              onPress={() => setPhaseAnnouncement(null)}
+              style={{ backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16, marginTop: 8 }}
+            >
+              <Text style={{ ...fonts.black, fontSize: 14, color: "#fff", letterSpacing: 1 }}>ACKNOWLEDGE</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Profile Modal */}
       <Modal visible={isProfileOpen} transparent animationType="fade">
@@ -397,7 +439,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
   );
 }
 
-const STATUS_BAR_HEIGHT = Constants.statusBarHeight ?? (Platform.OS === "android" ? 24 : 44);
+const STATUS_BAR_HEIGHT = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 24) : 44;
 
 const getStyles = (theme: any) =>
   StyleSheet.create({

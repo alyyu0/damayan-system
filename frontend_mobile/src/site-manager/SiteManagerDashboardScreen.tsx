@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, View, StyleSheet, ScrollView, SafeAreaView, Dimensions, Pressable, Text, Modal, Platform, TouchableOpacity } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,6 +9,7 @@ import { SiteManagerAfterScreen } from "./aftercalamity/SiteManagerAfterScreen";
 import { SiteManagerInventoryScreen } from "./inventory/SiteManagerInventoryScreen";
 import { SiteManagerMapScreen } from "./map/SiteManagerMapScreen";
 import { useSystemPhase } from "../context/SystemPhaseContext";
+import { loadSession } from "../session";
 
 export type OperationalStage = "STAGING" | "RESPONSE" | "RECOVERY";
 export type NavDestination = "Overview" | "Operations" | "Resources" | "Reporting";
@@ -19,11 +20,19 @@ interface SiteManagerDashboardScreenProps {
 
 export default function SiteManagerDashboardScreen({ onSignOut }: SiteManagerDashboardScreenProps) {
   // Stage is driven by the global system phase set by admin, with offline caching
-  const { operationalStage: stage } = useSystemPhase();
+  const { operationalStage: stage, refreshPhase } = useSystemPhase();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeNav, setActiveNav] = useState<NavDestination>("Overview");
   const [stageOverride, setStageOverride] = useState<OperationalStage | null>(null);
+
+  // Re-fetch phase with persona context after the session resolves so that any
+  // admin-set regional override for this line manager is applied immediately.
+  useEffect(() => {
+    loadSession().then(() => {
+      void refreshPhase();
+    });
+  }, []);
 
   const currentStage = stageOverride ?? stage;
   const theme = isDarkMode ? darkTheme : lightTheme;

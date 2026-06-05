@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Pressable, ScrollView, Text, TextInput, View, StyleSheet, TouchableOpacity, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { theme, fonts, lightTheme, darkTheme } from "../../../theme";
@@ -11,7 +11,7 @@ interface Member {
   isRegistered: boolean;
 }
 
-import { registerCitizen, addFamilyMember, getFamilyMembers, deleteFamilyMember, updateFamilyMember } from "../../../api";
+import { registerCitizen, addFamilyMember, getFamilyMembers, deleteFamilyMember, updateFamilyMember, createFamilyGroup } from "../../../api";
 
 export function CitizenHouseholdRegistrationScreen({
   onBack,
@@ -86,7 +86,7 @@ export function CitizenHouseholdRegistrationScreen({
 
   const handleAddMember = async () => {
     if (newName && newAge && newRelationship) {
-      const tempId = Math.random().toString(36).substr(2, 9);
+      const tempId = Math.random().toString(36).substring(2, 11);
       const newMember: Member = {
         id: tempId,
         name: newName,
@@ -190,26 +190,26 @@ export function CitizenHouseholdRegistrationScreen({
     }
 
     try {
-      console.log("Submitting household registration to backend...");
-      const randomCode = "HH-" + Math.floor(1000 + Math.random() * 9000);
-      const headName = authUser.name || (authUser.firstName + " " + authUser.lastName);
-      
-      // 1. Register head of household
-      await registerCitizen(session.accessToken, {
+      const headName = authUser.name || `${authUser.firstName} ${authUser.lastName}`;
+
+      // 1. Register head of household as a citizen (gets a personal QR code)
+      const registration = await registerCitizen(session.accessToken, {
         fullName: headName,
         birthDate: authUser.birthDate || "1990-01-01",
-        gender: authUser.gender || "Female",
-        bloodType: authUser.bloodType || "O+",
+        gender: authUser.gender || "Not specified",
+        bloodType: authUser.bloodType || "Unknown",
         medicalConditions: authUser.medicalConditions || "None",
         registrationType: "Family",
       });
 
-      // 2. Register all other family members
+      const headQrCode = registration?.qrCodeId;
+
+      // 2. Register additional family members in the family_members table
       const nonHeadMembers = members.filter(m => m.relationship !== "Head of Household");
       for (const m of nonHeadMembers) {
         try {
           await addFamilyMember(session.accessToken, {
-            qrCodeId: randomCode,
+            qrCodeId: headQrCode || "HH-TEMP",
             headFullName: headName,
             familyMemberName: m.name,
             relationship: m.relationship,
@@ -218,15 +218,23 @@ export function CitizenHouseholdRegistrationScreen({
             familyMemberCount: members.length,
           });
         } catch (memberErr) {
-          console.error("Failed to register family member on backend:", m.name, memberErr);
+          console.error("Failed to register family member:", m.name, memberErr);
         }
       }
 
-      if (onRefreshProfile) {
-        onRefreshProfile();
+      // 3. Create a family GROUP so the site manager can scan a unified QR at the shelter gate.
+      //    The family group QR is what the site manager uses for check-in/checkout.
+      try {
+        const familyLabel = `${headName}'s Household (${members.length} members)`;
+        await createFamilyGroup(session.accessToken, familyLabel);
+      } catch (fgErr) {
+        // Non-fatal — family group may already exist
+        console.warn("Family group creation skipped:", fgErr);
       }
+
+      onRefreshProfile?.();
     } catch (err) {
-      console.error("Failed to submit household registration to backend:", err);
+      console.error("Household registration failed:", err);
     } finally {
       onContinue();
     }

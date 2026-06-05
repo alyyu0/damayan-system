@@ -3742,7 +3742,13 @@ function MiniRegionMap({
     if (!containerRef.current) return;
     if (mapRef.current) return;
 
+    let destroyed = false;
+
     import('leaflet').then((L) => {
+      // Bail out if the effect was cleaned up before the async import resolved
+      // (happens in React StrictMode which unmounts/remounts in dev mode).
+      if (destroyed || !containerRef.current || mapRef.current) return;
+
       // Patch default icon
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -3760,10 +3766,12 @@ function MiniRegionMap({
     });
 
     return () => {
+      destroyed = true;
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, []);
+
 
   useEffect(() => {
     if (!mapRef.current) return;
