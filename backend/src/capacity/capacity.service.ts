@@ -90,7 +90,7 @@ export class CapacityService {
           .from('user_profiles')
           .select('auth_user_id, first_name, last_name')
           .in('auth_user_id', managerIds)
-      : { data: [], error: null };
+      : { data: [] as UserProfileRow[] };
 
     const profileMap = new Map(
       ((profiles ?? []) as UserProfileRow[]).map((profile) => [profile.auth_user_id, profile]),
@@ -108,6 +108,49 @@ export class CapacityService {
     return centers.map((row: EvacuationCenterRow) =>
       this.toCapacityCenter(row, assignmentMap.get(row.id) ?? []),
     );
+  }
+
+  async create(dto: {
+    name: string;
+    address?: string;
+    barangay?: string;
+    municipality?: string;
+    capacity?: number;
+    facilities?: string[];
+    contactPerson?: string;
+    contactPhone?: string;
+    lat?: number;
+    lng?: number;
+    description?: string;
+    maxManagers?: number;
+  }): Promise<CapacityCenter> {
+    const supabase = this.supabaseService.getClient() as any;
+    const { data, error } = await supabase
+      .from('evacuation_centers')
+      .insert({
+        name: dto.name,
+        address: dto.address ?? null,
+        barangay: dto.barangay ?? null,
+        municipality: dto.municipality ?? null,
+        capacity: dto.capacity ?? 0,
+        current_occupancy: 0,
+        facilities: dto.facilities ?? [],
+        contact_person: dto.contactPerson ?? null,
+        contact_phone: dto.contactPhone ?? null,
+        status: 'open',
+        lat: dto.lat ?? null,
+        lng: dto.lng ?? null,
+        description: dto.description ?? null,
+        max_managers: dto.maxManagers ?? 2,
+      })
+      .select('id, name, address, barangay, municipality, capacity, current_occupancy, facilities, contact_person, contact_phone, status, lat, lng, description, max_managers')
+      .single();
+
+    if (error) {
+      throw new NotFoundException(error.message);
+    }
+
+    return this.toCapacityCenter(data as EvacuationCenterRow, []);
   }
 
   async getStats() {

@@ -20,6 +20,7 @@ import {
   submitIncidentReport,
   getIncidentPhotoUploadUrl,
   getCapacity,
+  getActiveDisasterEvents,
   citizenSelfCheckIn,
   ApiError,
   type AppNotification,
@@ -30,6 +31,7 @@ import type { CapacityCenter } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type DuringStep =
+  | "dashboard"
   | "rescue_decision"
   | "report_incident"
   | "wait_rescue"
@@ -41,6 +43,7 @@ type DuringStep =
   | "logged_in";
 
 const STEP_PROGRESS: Record<DuringStep, number> = {
+  dashboard: 0,
   rescue_decision: 0,
   report_incident: 15,
   wait_rescue: 30,
@@ -69,6 +72,29 @@ function capacityCenterToEvacCenter(c: CapacityCenter): EvacCenter {
     capacity: c.capacity,
     currentOccupancy: c.currentOccupancy,
   };
+}
+
+function getCenterKey(center: EvacCenter): string {
+  const name = center.name.trim().toLowerCase();
+  if (name) return name;
+  const lat = Number.isFinite(center.latitude) ? center.latitude.toFixed(5) : "0";
+  const lng = Number.isFinite(center.longitude) ? center.longitude.toFixed(5) : "0";
+  return `${lat}|${lng}`;
+}
+
+function uniqueEvacCenters(centers: EvacCenter[]): EvacCenter[] {
+  const seen = new Set<string>();
+  return centers.filter((center) => {
+    const key = getCenterKey(center);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function formatCapacity(center: EvacCenter): string | null {
+  if (center.capacity === undefined || center.currentOccupancy === undefined) return null;
+  return `${center.currentOccupancy}/${center.capacity} occupied`;
 }
 
 // ─── Pulsating Dot ────────────────────────────────────────────────────────────
@@ -115,21 +141,26 @@ function ProgressBar({ step }: { readonly step: DuringStep }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function CitizenDuringScreen({
   onBack,
-  initialStep = "rescue_decision",
+  initialStep = "dashboard",
   session,
   qrCodeId,
   notifications = [],
+  showBackButton = true,
 }: {
   readonly onBack: () => void;
   readonly initialStep?: string;
   readonly session: any;
   readonly qrCodeId?: string | null;
   readonly notifications?: AppNotification[];
+  readonly showBackButton?: boolean;
 }) {
-  const [step, setStep] = useState<DuringStep>("rescue_decision");
+  const [step, setStep] = useState<DuringStep>(
+    initialStep === "decision" ? "rescue_decision" : (initialStep as DuringStep),
+  );
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [activeAlertCount, setActiveAlertCount] = useState(0);
 
   // GPS
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -162,14 +193,30 @@ export function CitizenDuringScreen({
         const valid = centers
           .filter((c) => c.latitude && c.longitude)
           .map(capacityCenterToEvacCenter);
-        if (valid.length > 0) {
-          setEvacCenters(valid);
-          setOrderedCenters(valid);
-          setSelectedCenter(valid[0]);
+        const unique = uniqueEvacCenters(valid);
+        if (unique.length > 0) {
+          setEvacCenters(unique);
+          setOrderedCenters(unique);
+          setSelectedCenter(unique[0]);
         }
       })
       .catch(() => { /* keep fallback */ })
       .finally(() => { if (!cancelled) setCentersLoading(false); });
+    return () => { cancelled = true; };
+  }, [session?.accessToken]);
+
+  useEffect(() => {
+    if (!session?.accessToken) return;
+    let cancelled = false;
+    getActiveDisasterEvents(session.accessToken)
+      .then((events) => {
+        if (!cancelled) {
+          setActiveAlertCount(events.filter((event) => event.status === "active" || event.status === "DURING").length);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setActiveAlertCount(0);
+      });
     return () => { cancelled = true; };
   }, [session?.accessToken]);
 
@@ -306,6 +353,22 @@ export function CitizenDuringScreen({
 
   function go(next: DuringStep) { setStep(next); }
 
+  function goBackOneStep() {
+    const previousStep: Record<DuringStep, DuringStep> = {
+      dashboard: "dashboard",
+      rescue_decision: "dashboard",
+      report_incident: "dashboard",
+      wait_rescue: "report_incident",
+      delivery_confirmation: "report_incident",
+      self_evacuate: "dashboard",
+      safe_zone_map: "self_evacuate",
+      navigate_evacuation: "safe_zone_map",
+      arrive_site: "navigate_evacuation",
+      logged_in: "dashboard",
+    };
+    setStep(previousStep[step] ?? "dashboard");
+  }
+
   const locationLabel = locationLoading
     ? "Detecting location…"
     : locationDenied
@@ -315,12 +378,23 @@ export function CitizenDuringScreen({
   const locationIconName: "time" | "warning" | "location" =
     locationLoading ? "time" : locationDenied ? "warning" : "location";
 
+  const incidentCount = notifications.filter((n) => ["incident", "dispatch_assigned", "system"].includes(n.type)).length;
+  const nearestCenter = orderedCenters[0] ?? selectedCenter;
+  const nearestDistance = userLocation && nearestCenter
+    ? manhattanDistanceMeters(userLocation, nearestCenter) / 1000
+    : null;
+  const shouldShowTopBack = showBackButton && step !== "dashboard";
+
   return (
     <View style={styles.shell}>
       <View style={styles.topBar}>
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </Pressable>
+        {shouldShowTopBack ? (
+          <Pressable style={styles.backButton} onPress={goBackOneStep}>
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
+          </Pressable>
+        ) : (
+          <View style={styles.topBarSide} />
+        )}
         <View style={styles.topBarCenter}>
           <Text style={styles.topBarTitle}>Response Center</Text>
           <Text style={styles.topBarPhase}>Calamity Mode Active</Text>
@@ -333,6 +407,72 @@ export function CitizenDuringScreen({
       <ProgressBar step={step} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {step === "dashboard" && (
+          <View style={styles.stepCard}>
+            <View style={[styles.stepIconWrap, { backgroundColor: "rgba(186,26,26,0.08)" }]}>
+              <Ionicons name="alert-circle" size={36} color={theme.danger} />
+            </View>
+            <View>
+              <Text style={[styles.stepTag, { color: theme.danger }]}>Emergency Dashboard</Text>
+              <Text style={styles.stepTitle}>Where do I go and{"\n"}how do I get help?</Text>
+            </View>
+            <Text style={styles.stepCopy}>
+              Monitor active alerts, send an SOS, and move toward the nearest open evacuation center.
+            </Text>
+
+            <View style={[styles.infoRow, { borderLeftColor: theme.danger }]}>
+              <Ionicons name="notifications" size={24} color={theme.danger} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoRowText}>Active Alerts</Text>
+                <Text style={styles.infoRowSub}>{activeAlertCount || incidentCount || 1} live advisory item{(activeAlertCount || incidentCount || 1) === 1 ? "" : "s"}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.infoRow, { borderLeftColor: dispatchNotification ? theme.primary : theme.warning }]}>
+              <Ionicons name={dispatchNotification ? "checkmark-circle" : "radio"} size={24} color={dispatchNotification ? theme.primary : theme.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoRowText}>SOS Status</Text>
+                <Text style={styles.infoRowSub}>{dispatchNotification ? "Rescue unit assigned" : "No active SOS request"}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.infoRow, { borderLeftColor: theme.primary }]}>
+              <Ionicons name="home" size={24} color={theme.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoRowText}>Nearest Evacuation Center</Text>
+                <Text style={styles.infoRowSub}>
+                  {nearestCenter?.name ?? "Loading shelters"}
+                  {nearestDistance !== null ? ` | ${nearestDistance.toFixed(1)} km away` : ""}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.infoRow, { borderLeftColor: locationDenied ? theme.warning : theme.info }]}>
+              <Ionicons name={locationIconName} size={24} color={locationDenied ? theme.warning : theme.info} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoRowText}>Safety Status</Text>
+                <Text style={styles.infoRowSub}>{locationLabel}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.infoRow, { borderLeftColor: theme.info }]}>
+              <Ionicons name="map" size={24} color={theme.info} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.infoRowText}>Live Incidents</Text>
+                <Text style={styles.infoRowSub}>{incidentCount} notification update{incidentCount === 1 ? "" : "s"} from dispatch</Text>
+              </View>
+            </View>
+
+            <Pressable style={[styles.ctaButton, { backgroundColor: theme.danger }]} onPress={() => go("report_incident")}>
+              <Ionicons name="megaphone" size={22} color="#fff" />
+              <Text style={styles.ctaButtonText}>Send SOS</Text>
+            </Pressable>
+            <Pressable style={styles.optionButtonNo} onPress={() => go("self_evacuate")}>
+              <Ionicons name="walk" size={22} color={theme.text} />
+              <Text style={styles.optionButtonTextDark}>Find evacuation route</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ── STEP 0: Rescue Decision ─────────────────────────────────── */}
         {step === "rescue_decision" && (
@@ -490,7 +630,7 @@ export function CitizenDuringScreen({
           </View>
         )}
 
-        {/* ── STEP 2: Delivery Confirmation (YES path after SOS) ───────── */}
+        {/* STEP 2: Delivery Confirmation */}
         {step === "delivery_confirmation" && (
           <View style={styles.stepCard}>
             <View style={styles.confirmHero}>
@@ -504,7 +644,7 @@ export function CitizenDuringScreen({
               <Ionicons name="person" size={24} color={theme.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.infoRowText}>Dispatcher Assigned</Text>
-                <Text style={styles.infoRowSub}>Response Unit — monitoring your location</Text>
+                <Text style={styles.infoRowSub}>Response Unit - monitoring your location</Text>
               </View>
             </View>
             <Pressable style={[styles.ctaButton, { backgroundColor: theme.primary }]} onPress={() => go("safe_zone_map")}>
@@ -514,7 +654,7 @@ export function CitizenDuringScreen({
           </View>
         )}
 
-        {/* ── STEP 3: Safe Zone Map ────────────────────────────────────── */}
+        {/* STEP 3: Safe Zone Map */}
         {step === "safe_zone_map" && (
           <View style={styles.stepCard}>
             <View style={[styles.stepIconWrap, { backgroundColor: "rgba(46,125,50,0.08)" }]}>
@@ -547,9 +687,7 @@ export function CitizenDuringScreen({
             {orderedCenters.map((center) => {
               const dist = userLocation ? manhattanDistanceMeters(userLocation, center) / 1000 : null;
               const isSelected = selectedCenter.id === center.id;
-              const capacityPct = center.capacity && center.currentOccupancy !== undefined
-                ? Math.round((center.currentOccupancy / center.capacity) * 100)
-                : null;
+              const capacityLabel = formatCapacity(center);
               return (
                 <Pressable key={center.id} onPress={() => setSelectedCenter(center)}
                   style={[styles.infoRow, { borderLeftColor: isSelected ? theme.primary : theme.line }, isSelected && { backgroundColor: "rgba(46,125,50,0.06)" }]}>
@@ -560,7 +698,7 @@ export function CitizenDuringScreen({
                       {dist === null ? "Calculating…" : `${dist.toFixed(1)} km away`}
                       {" · "}
                       {center.status}
-                      {capacityPct !== null ? `  ·  ${capacityPct}% full` : ""}
+                      {capacityLabel ? `  ·  ${capacityLabel}` : ""}
                     </Text>
                   </View>
                   {isSelected && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
@@ -570,7 +708,9 @@ export function CitizenDuringScreen({
 
             <Pressable style={[styles.ctaButton, { backgroundColor: theme.primary }]} onPress={() => go("navigate_evacuation")}>
               <Ionicons name="navigate" size={24} color="#fff" />
-              <Text style={styles.ctaButtonText}>Navigate to {selectedCenter.name.split(" ").slice(0, 2).join(" ")}</Text>
+              <Text style={styles.routeButtonText} numberOfLines={2}>
+                Navigate to {selectedCenter.name}
+              </Text>
             </Pressable>
           </View>
         )}

@@ -10,6 +10,7 @@ import { getProfile, getCitizenProfile, getFileViewUrl, ApiError, type CitizenPr
 import { CitizenBeforeScreen } from "./beforecalamity/screens/CitizenBeforeScreen";
 import { CitizenDuringScreen } from "./duringcalamity/CitizenDuringScreen";
 import CitizenAfterScreen from "./aftercalamity/CitizenAfterScreen";
+import { CitizenSafetyMapScreen } from "./CitizenSafetyMapScreen";
 import { CitizenIndividualRegistrationScreen } from "./beforecalamity/screens/CitizenIndividualRegistrationScreen";
 import { CitizenHouseholdRegistrationScreen } from "./beforecalamity/screens/CitizenHouseholdRegistrationScreen";
 import { CitizenProfileEditScreen } from "./CitizenProfileEditScreen";
@@ -28,6 +29,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
   const { citizenPhase: systemPhase, refreshPhase } = useSystemPhase();
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
   const phase = phaseOverride || systemPhase;
+  const prevSystemPhaseRef = useRef<Phase | null>(null);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -93,6 +95,13 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
     });
   }, []);
 
+  useEffect(() => {
+    if (prevSystemPhaseRef.current !== null && prevSystemPhaseRef.current !== systemPhase) {
+      setPhaseOverride(null);
+    }
+    prevSystemPhaseRef.current = systemPhase;
+  }, [systemPhase]);
+
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications(userId, token);
 
   // ── Phase change announcement ─────────────────────────────────────────────
@@ -112,6 +121,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
 
   const isEditingProfile = targetStep === "edit_profile";
   const isViewingFamilyGroup = targetStep === "family_group";
+  const isViewingSafetyMap = targetStep === "safety_map";
 
   const styles = getStyles(theme);
 
@@ -172,7 +182,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
       <View style={[styles.orb, styles.orb2]} />
 
       {/* Header — hidden while editing profile or viewing family group */}
-      {!isEditingProfile && !isViewingFamilyGroup && (
+      {!isEditingProfile && !isViewingFamilyGroup && !isViewingSafetyMap && (
         <View style={styles.headerSafe}>
           <View style={styles.headerInner}>
             {/* Brand */}
@@ -240,6 +250,14 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
             citizenProfile={citizenProfile}
             onRefreshProfile={loadUserData}
           />
+        ) : isViewingSafetyMap ? (
+          <CitizenSafetyMapScreen
+            phase={phase}
+            session={session}
+            notifications={notifications}
+            onBack={() => { setTargetStep("dashboard"); setActiveNav("Overview"); }}
+            onReportIncident={() => { setPhaseOverride("during"); setTargetStep("report_incident"); setActiveNav("Overview"); }}
+          />
         ) : (
           <>
             {phase === "before" && (
@@ -267,10 +285,10 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
                 ) : (
                   <CitizenBeforeScreen
                     onBack={onSignOut}
-                    onOpenResponse={() => { setPhaseOverride("during"); setActiveNav("Safety Map"); setTargetStep("decision"); }}
+                    onOpenResponse={() => { setActiveNav("Safety Map"); setTargetStep("safety_map"); }}
                     onRegisterIndividual={() => setTargetStep("individual_registration")}
                     onRegisterHousehold={() => setTargetStep("household_registration")}
-                    onReportIncident={() => { setPhaseOverride("during"); setTargetStep("report_incident"); setActiveNav("Safety Map"); }}
+                    onReportIncident={() => { setPhaseOverride("during"); setTargetStep("report_incident"); setActiveNav("Overview"); }}
                     initialStep={targetStep === "registration" ? "registration" : "dashboard"}
                     citizenProfile={citizenProfile}
                     authUser={authUser}
@@ -286,7 +304,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
             {phase === "during" && (
               <CitizenDuringScreen
                 onBack={() => { setPhaseOverride(null); setTargetStep("dashboard"); setActiveNav("Overview"); }}
-                initialStep={targetStep === "report_incident" ? "report_incident" : "decision"}
+                initialStep={targetStep === "report_incident" ? "report_incident" : "dashboard"}
                 session={session}
                 qrCodeId={citizenProfile?.qrCodeId}
                 notifications={notifications}
@@ -306,7 +324,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
       </View>
 
       {/* Bottom Navigation — hidden while editing profile or viewing family group */}
-      {!isEditingProfile && !isViewingFamilyGroup && (
+      {!isEditingProfile && !isViewingFamilyGroup && !isViewingSafetyMap && (
         <View style={styles.bottomNavWrapper}>
           <View style={styles.bottomNavInner}>
             {(
@@ -325,8 +343,7 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
                     if (item.id === "Family & ID") {
                       setTargetStep("family_group");
                     } else if (item.id === "Safety Map") {
-                      setPhaseOverride("during");
-                      setTargetStep("decision");
+                      setTargetStep("safety_map");
                     } else {
                       setPhaseOverride(null);
                       setTargetStep("dashboard");

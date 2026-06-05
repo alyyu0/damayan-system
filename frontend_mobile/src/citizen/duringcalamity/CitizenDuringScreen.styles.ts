@@ -50,6 +50,10 @@ export const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
+  topBarSide: {
+    width: 44,
+    height: 44,
+  },
   topBarCenter: {
     flex: 1,
     alignItems: "center",
@@ -406,6 +410,15 @@ export const styles = StyleSheet.create({
     color: "#fff",
     letterSpacing: 0.5,
     textTransform: "uppercase",
+  },
+  routeButtonText: {
+    flex: 1,
+    fontSize: 15,
+    ...fonts.black,
+    color: "#fff",
+    letterSpacing: 0,
+    textAlign: "center",
+    lineHeight: 20,
   },
   ghostButton: {
     minHeight: 60,

@@ -13,7 +13,7 @@ import QRCode from "react-native-qrcode-svg";
 import { theme, fonts } from "../../theme";
 import { checkOutByQrCode, type AppNotification } from "../../api";
 
-type AfterStep = "relief_claim" | "all_clear" | "exit_decision" | "final_credentials" | "end";
+type AfterStep = "dashboard" | "damage_report" | "assistance" | "relief_claim" | "all_clear" | "exit_decision" | "final_credentials" | "end";
 
 interface CitizenAfterScreenProps {
   onBack: () => void;
@@ -30,7 +30,7 @@ export default function CitizenAfterScreen({
   session,
   notifications = [],
 }: Readonly<CitizenAfterScreenProps>) {
-  const [step, setStep] = useState<AfterStep>("relief_claim");
+  const [step, setStep] = useState<AfterStep>("dashboard");
   const [leaving, setLeaving] = useState<boolean | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
 
@@ -63,6 +63,108 @@ export default function CitizenAfterScreen({
 
   const renderStep = () => {
     switch (step) {
+      case "dashboard":
+        return (
+          <View style={styles.stepContainer}>
+            <View style={styles.card}>
+              <View style={[styles.iconCircle, { backgroundColor: theme.infoLight }]}>
+                <Ionicons name="checkmark-done-circle" size={36} color={theme.info} />
+              </View>
+              <Text style={styles.title}>How do I recover and receive assistance?</Text>
+              <Text style={styles.desc}>
+                Track relief claims, report household damage, and follow recovery announcements from your barangay.
+              </Text>
+
+              <View style={styles.recoveryGrid}>
+                <Pressable style={styles.recoveryTile} onPress={() => setStep("assistance")}>
+                  <Ionicons name="clipboard" size={24} color={theme.primary} />
+                  <Text style={styles.recoveryTileTitle}>Assistance Requests</Text>
+                  <Text style={styles.recoveryTileMeta}>Pending review</Text>
+                </Pressable>
+                <Pressable style={styles.recoveryTile} onPress={() => setStep("damage_report")}>
+                  <Ionicons name="construct" size={24} color={theme.warning} />
+                  <Text style={styles.recoveryTileTitle}>Damage Reports</Text>
+                  <Text style={styles.recoveryTileMeta}>Submit photos</Text>
+                </Pressable>
+                <Pressable style={styles.recoveryTile} onPress={() => setStep("relief_claim")}>
+                  <Ionicons name="gift" size={24} color={theme.primary} />
+                  <Text style={styles.recoveryTileTitle}>Relief Claim Status</Text>
+                  <Text style={styles.recoveryTileMeta}>QR ready</Text>
+                </Pressable>
+                <Pressable style={styles.recoveryTile} onPress={() => setStep("all_clear")}>
+                  <Ionicons name="megaphone" size={24} color={theme.info} />
+                  <Text style={styles.recoveryTileTitle}>Recovery Announcements</Text>
+                  <Text style={styles.recoveryTileMeta}>{allClearNotif ? "New update" : "All clear active"}</Text>
+                </Pressable>
+              </View>
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => setStep("relief_claim")}>
+                <Ionicons name="qr-code" size={22} color="#fff" />
+                <Text style={styles.btnText}>OPEN RELIEF CLAIM</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+
+      case "assistance":
+        return (
+          <View style={styles.stepContainer}>
+            <View style={styles.card}>
+              <View style={[styles.iconCircle, { backgroundColor: theme.primarySoft }]}>
+                <Ionicons name="clipboard" size={36} color={theme.primary} />
+              </View>
+              <Text style={styles.title}>Assistance Requests</Text>
+              <Text style={styles.desc}>
+                Your recovery request queue is ready for barangay validation. Use your QR ID when claiming relief or follow-up services.
+              </Text>
+              <View style={styles.statusList}>
+                <View style={styles.statusItem}>
+                  <Ionicons name="time" size={24} color={theme.warning} />
+                  <Text style={styles.statusText}>Shelter and food assistance pending review</Text>
+                </View>
+                <View style={styles.statusItem}>
+                  <Ionicons name="medical" size={24} color={theme.info} />
+                  <Text style={styles.statusText}>Medical follow-up available at relief desk</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep("dashboard")}>
+                <Text style={styles.secondaryBtnText}>BACK TO RECOVERY DASHBOARD</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+
+      case "damage_report":
+        return (
+          <View style={styles.stepContainer}>
+            <View style={styles.card}>
+              <View style={[styles.iconCircle, { backgroundColor: "rgba(255,179,0,0.12)" }]}>
+                <Ionicons name="construct" size={36} color={theme.warning} />
+              </View>
+              <Text style={styles.title}>Damage Report</Text>
+              <Text style={styles.desc}>
+                Document house damage, injuries, lost items, or livelihood impact so responders can prioritize recovery support.
+              </Text>
+              <View style={styles.statusList}>
+                <View style={styles.statusItem}>
+                  <Ionicons name="camera" size={24} color={theme.warning} />
+                  <Text style={styles.statusText}>Attach photos of damaged areas</Text>
+                </View>
+                <View style={styles.statusItem}>
+                  <Ionicons name="document-text" size={24} color={theme.info} />
+                  <Text style={styles.statusText}>Prepare ID and proof of residence</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => setStep("assistance")}>
+                <Text style={styles.btnText}>SUBMIT FOR ASSISTANCE REVIEW</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep("dashboard")}>
+                <Text style={styles.secondaryBtnText}>BACK TO RECOVERY DASHBOARD</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+
       case "relief_claim":
         return (
           <View style={styles.stepContainer}>
@@ -218,7 +320,13 @@ export default function CitizenAfterScreen({
               <Text style={styles.desc}>
                 Your records have been updated. We wish you a safe return home. Stay vigilant!
               </Text>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={onBack}>
+              <View style={styles.noticeBox}>
+                <Ionicons name="information-circle" size={18} color={theme.info} />
+                <Text style={styles.noticeText}>
+                  Please wait for the system to override the phase and stand by for further messages from your barangay.
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStep("dashboard")}>
                 <Text style={styles.secondaryBtnText}>BACK TO DASHBOARD</Text>
               </TouchableOpacity>
             </View>
@@ -320,6 +428,24 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   notifText: { ...fonts.bold, fontSize: 13, color: theme.primary, flex: 1, lineHeight: 19 },
+  recoveryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    width: "100%",
+  },
+  recoveryTile: {
+    flex: 1,
+    minWidth: 130,
+    backgroundColor: theme.surfaceAlt,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.line,
+    gap: 8,
+  },
+  recoveryTileTitle: { ...fonts.black, fontSize: 13, color: theme.text, lineHeight: 18 },
+  recoveryTileMeta: { ...fonts.bold, fontSize: 11, color: theme.textLight },
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -332,6 +458,18 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   infoText: { ...fonts.bold, fontSize: 13, color: "#8f5d00", flex: 1, lineHeight: 19 },
+  noticeBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "rgba(0,97,164,0.08)",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,97,164,0.18)",
+    width: "100%",
+  },
+  noticeText: { ...fonts.bold, fontSize: 13, color: theme.info, flex: 1, lineHeight: 19 },
   btnRow: { flexDirection: "row", gap: 16, width: "100%" },
   choiceBtn: {
     flex: 1,
