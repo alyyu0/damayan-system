@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native";
 import { theme, fonts, lightTheme, darkTheme } from "../../theme";
-import { createIncidentReport, createManualCheckIn, getInventory, getCitizenByQrCode, getCapacity, getCheckInByQrCode, checkOutById, getDisasterEvents } from "../../api";
+import { createIncidentReport, createManualCheckIn, getInventory, getCitizenByQrCode, getCapacity, getCheckInByQrCode, checkOutById, getDisasterEvents, getSiteManagerFamilyGroupByQrCode, scanCheckIn, checkOutByQrCode } from "../../api";
 import { loadSession } from "../../session";
 import { parseScannedPayload, getInitials } from "../qr/qr-utils";
 import type { AuthSession, DisasterEvent } from "../../types";
@@ -40,6 +40,22 @@ function normalizeIncidentSeverity(value: string): "critical" | "high" | "modera
 
 // ── Scan mode type ────────────────────────────────────────────────────────────
 type ScanMode = "check-in" | "check-out";
+
+function buildFamilyScanTarget(familyGroup: any, qrCodeId: string) {
+  const memberCount = Array.isArray(familyGroup.members) ? familyGroup.members.length : 0;
+  const familyName = familyGroup.familyName || familyGroup.headName || "Family Group";
+
+  return {
+    _qrCodeId: qrCodeId,
+    isFamilyGroup: true,
+    familyGroup,
+    fullName: familyName,
+    firstName: "Family",
+    lastName: "Group",
+    registrationType: "Family Group",
+    familySize: memberCount + 1,
+  };
+}
 
 export function SiteManagerDuringScreen({
   onBack,
@@ -144,9 +160,25 @@ export function SiteManagerDuringScreen({
       const citizen = await getCitizenByQrCode(session.accessToken, qrCodeId);
 
       if (!citizen) {
-        setScanError(`No citizen found for QR: ${qrCodeId}`);
-        scanLockRef.current = false;
-        setIsProcessing(false);
+        const familyGroup = await getSiteManagerFamilyGroupByQrCode(session.accessToken, qrCodeId);
+
+        if (!familyGroup) {
+          setScanError(`No citizen or family group found for QR: ${qrCodeId}`);
+          scanLockRef.current = false;
+          setIsProcessing(false);
+          return;
+        }
+
+        setScannedCitizen(buildFamilyScanTarget(familyGroup, qrCodeId));
+        setScanError(null);
+
+        if (scanMode === "check-in") {
+          setScannedGroupSize(String((familyGroup.members?.length ?? 0) + 1));
+          setCheckInModalOpen(true);
+        } else {
+          setCheckOutRecord(null);
+          setCheckOutModalOpen(true);
+        }
         return;
       }
 
@@ -179,15 +211,22 @@ export function SiteManagerDuringScreen({
     if (!session?.accessToken || !scannedCitizen) return;
     setIsSubmittingCheckIn(true);
     try {
-      // Use the same endpoint as the web: createManualCheckIn with QR citizen data
-      await createManualCheckIn(session.accessToken, {
-        evacueeNumber: scannedCitizen._qrCodeId,
-        firstName: scannedCitizen.firstName || scannedCitizen.fullName?.split(" ")[0] || "",
-        zone: scannedCitizen.zone || "",
-        location: "Site Manager Mobile Check-in",
-        centerId: selectedCenterId,
-        familySize: parseInt(scannedGroupSize) || scannedCitizen.familySize || undefined,
-      });
+      if (scannedCitizen.isFamilyGroup) {
+        await scanCheckIn(session.accessToken, {
+          qrCode: scannedCitizen._qrCodeId,
+          centerId: selectedCenterId,
+        });
+      } else {
+        // Use the same endpoint as the web: createManualCheckIn with QR citizen data
+        await createManualCheckIn(session.accessToken, {
+          evacueeNumber: scannedCitizen._qrCodeId,
+          firstName: scannedCitizen.firstName || scannedCitizen.fullName?.split(" ")[0] || "",
+          zone: scannedCitizen.zone || "",
+          location: "Site Manager Mobile Check-in",
+          centerId: selectedCenterId,
+          familySize: parseInt(scannedGroupSize) || scannedCitizen.familySize || undefined,
+        });
+      }
       const name = scannedCitizen.fullName || `${scannedCitizen.firstName} ${scannedCitizen.lastName}`;
       setCheckInModalOpen(false);
       setScannedCitizen(null);
@@ -203,10 +242,15 @@ export function SiteManagerDuringScreen({
 
   // ── Confirm Check-Out ─────────────────────────────────────────────────────
   const handleConfirmCheckOut = async () => {
-    if (!session?.accessToken || !scannedCitizen || !checkOutRecord) return;
+    if (!session?.accessToken || !scannedCitizen) return;
+    if (!scannedCitizen.isFamilyGroup && !checkOutRecord) return;
     setIsSubmittingCheckOut(true);
     try {
-      await checkOutById(session.accessToken, checkOutRecord.evacueeId);
+      if (scannedCitizen.isFamilyGroup) {
+        await checkOutByQrCode(session.accessToken, scannedCitizen._qrCodeId);
+      } else {
+        await checkOutById(session.accessToken, checkOutRecord.evacueeId);
+      }
       setCheckOutModalOpen(false);
       setScannedCitizen(null);
       setCheckOutRecord(null);
@@ -733,10 +777,10 @@ export function SiteManagerDuringScreen({
               letterSpacing: 1,
               textAlign: "center",
             }}>
-              {scanMode === "check-in" ? "SCAN CITIZEN QR TO CHECK IN" : "SCAN CITIZEN QR TO CHECK OUT"}
+              {scanMode === "check-in" ? "SCAN CITIZEN OR FAMILY QR TO CHECK IN" : "SCAN CITIZEN OR FAMILY QR TO CHECK OUT"}
             </Text>
             <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 6 }}>
-              Point camera at the citizen's QR code
+              Point camera at a citizen or shared family QR code
             </Text>
           </View>
           {/* Close button */}

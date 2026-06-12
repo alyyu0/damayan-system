@@ -37,6 +37,16 @@ export function buildQRPayload(qrCodeId: string): string {
 export function parseScannedPayload(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
+
+  const queryMatch = /[?&]qrCode=([^&#]+)/i.exec(trimmed);
+  if (queryMatch?.[1]) {
+    try {
+      return decodeURIComponent(queryMatch[1]).trim() || null;
+    } catch {
+      return queryMatch[1].trim() || null;
+    }
+  }
+
   return trimmed.startsWith("QR-") ? trimmed.slice(3) : trimmed;
 }
 

@@ -420,8 +420,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  shelterPinActive: {
+    backgroundColor: theme.primary,
+  },
   shelterName: { ...fonts.black, color: theme.text, fontSize: 14 },
+  shelterNameActive: {
+    color: theme.primary,
+  },
   shelterMeta: { ...fonts.bold, color: theme.textLight, fontSize: 11, marginTop: 3, lineHeight: 16 },
+  routeHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: theme.line,
+  },
+  routeHintText: {
+    ...fonts.medium,
+    fontSize: 12,
+    color: SHELTER_ACCENT,
+  },
   sosButton: {
     height: 58,
     borderRadius: 20,

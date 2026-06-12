@@ -17,15 +17,17 @@ import { CitizenProfileEditScreen } from "./CitizenProfileEditScreen";
 import { CitizenFamilyGroupScreen } from "./familygroup/CitizenFamilyGroupScreen";
 import { useSystemPhase } from "../context/SystemPhaseContext";
 import type { AuthSession } from "../types";
+import { isSiteManagerRole } from "../roles";
 
 export type Phase = "before" | "during" | "after";
 export type NavDestination = "Overview" | "Family & ID" | "Safety Map";
 
 interface CitizenDashboardScreenProps {
   onSignOut: () => void;
+  onSiteManagerSession?: () => void;
 }
 
-export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDashboardScreenProps>) {
+export default function CitizenDashboardScreen({ onSignOut, onSiteManagerSession }: Readonly<CitizenDashboardScreenProps>) {
   const { citizenPhase: systemPhase, refreshPhase } = useSystemPhase();
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
   const phase = phaseOverride || systemPhase;
@@ -53,6 +55,11 @@ export default function CitizenDashboardScreen({ onSignOut }: Readonly<CitizenDa
       setAuthUser(activeSession.user);
       setToken(activeSession.accessToken);
       setUserId(activeSession.user.authUserId ?? activeSession.user.id);
+
+      if (isSiteManagerRole(activeSession.user.role)) {
+        onSiteManagerSession?.();
+        return;
+      }
 
       try {
         const latestProfile = await getProfile(activeSession.accessToken);

@@ -57,7 +57,7 @@ export function CitizenFamilyGroupScannerScreen({
     if (!raw) return;
 
     // Block scanning a family group QR — only individual citizen QRs should be added
-    if (raw.startsWith("FAM-")) {
+    if (/^(?:QR-)?(?:FAM|FAMILY-GROUP)-/i.test(raw)) {
       setError("Cannot add a family group QR as a member. Please scan an individual citizen QR.");
       setStatus("error");
       return;

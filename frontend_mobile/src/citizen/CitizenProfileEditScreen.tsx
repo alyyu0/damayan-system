@@ -185,7 +185,6 @@ export function CitizenProfileEditScreen({
         phone,
         address,
         barangay,
-        municipality,
         province,
         gender,
         bloodType,

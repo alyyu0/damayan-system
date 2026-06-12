@@ -16,6 +16,7 @@ import { styles } from "./SiteManagerLoginScreen.styles";
 import { login, getProfile, ApiError } from "../../api";
 import { saveSession } from "../../session";
 import { AppRole } from "../../types";
+import { isSiteManagerRole } from "../../roles";
 
 export function SiteManagerLoginScreen({
   onBack,
@@ -47,13 +48,13 @@ export function SiteManagerLoginScreen({
 
       console.log("[Login] Step 1: Calling login API...");
       const result = await login({
-        email: username.trim(),
+        email: username.trim().toLowerCase(),
         password: password.trim(),
         requiredRole: AppRole.LINE_MANAGER,
       });
       console.log("[Login] Step 2: Login success, role =", result.user.role);
 
-      if (result.user.role !== AppRole.LINE_MANAGER) {
+      if (!isSiteManagerRole(result.user.role)) {
         Alert.alert("Access Denied", "This account does not have site manager access.");
         return;
       }

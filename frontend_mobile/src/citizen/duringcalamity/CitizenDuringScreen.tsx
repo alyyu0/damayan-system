@@ -279,7 +279,7 @@ export function CitizenDuringScreen({
   async function handlePickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { Alert.alert("Permission required", "Please allow photo library access."); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images" as any], allowsEditing: true, aspect: [4, 3], quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.8 });
     if (!result.canceled && result.assets.length > 0) setPhotoUri(result.assets[0].uri);
   }
 

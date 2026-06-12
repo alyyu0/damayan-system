@@ -165,6 +165,42 @@ export class ApiError extends Error {
   }
 }
 
+function extractQrCodeValue(value: string): string {
+  const raw = value.trim();
+  const queryMatch = /[?&]qrCode=([^&#]+)/i.exec(raw);
+  if (!queryMatch?.[1]) {
+    return raw;
+  }
+
+  try {
+    return decodeURIComponent(queryMatch[1]).trim();
+  } catch {
+    return queryMatch[1].trim();
+  }
+}
+
+function buildQrCodeCandidates(value: string): string[] {
+  const raw = extractQrCodeValue(value);
+  if (!raw) return [];
+
+  const withoutQrPrefix = raw.replace(/^QR-/i, "");
+  return Array.from(new Set([
+    raw,
+    raw.toUpperCase(),
+    withoutQrPrefix,
+    withoutQrPrefix.toUpperCase(),
+    `QR-${withoutQrPrefix}`,
+    `QR-${withoutQrPrefix.toUpperCase()}`,
+  ]));
+}
+
+function normalizeQrCodeForCompare(value: string | null | undefined): string {
+  return extractQrCodeValue(value ?? "")
+    .replace(/^QR-/i, "")
+    .trim()
+    .toUpperCase();
+}
+
 async function request<T>(path: string, init: RequestInit = {}, token?: string) {
   const headers = new Headers(init.headers ?? {});
 
@@ -345,7 +381,7 @@ export async function getDashboard(scope: "site-manager", token: string) {
 }
 
 export async function getDisasterEvents(scope: "site-manager", token: string) {
-  return request<DisasterEvent[]>("/site-manager/disaster-events", {}, token);
+  return request<DisasterEvent[] | { disasterEvents?: DisasterEvent[] }>("/site-manager/disaster-events", {}, token);
 }
 
 export async function getInventory(scope: "admin" | "site-manager", token: string) {
@@ -452,6 +488,7 @@ export async function scanCheckIn(
   token: string,
   payload: {
     qrCode: string;
+    centerId?: string;
   },
 ) {
   return request<CheckInRecord>("/site-manager/check-ins/scan", {
@@ -471,8 +508,16 @@ export async function getCheckInByQrCode(
   qrCodeId: string,
 ): Promise<CheckInRecord | null> {
   const all = await request<CheckInRecord[]>("/site-manager/check-ins", {}, token);
+  const normalizedQrCode = normalizeQrCodeForCompare(qrCodeId);
   const match = all.find(
-    (r: any) => (r.evacueeId === qrCodeId || r.evacueeNumber === qrCodeId || r.qrCodeId === qrCodeId) && r.status === "checked-in"
+    (r: any) =>
+      r.status === "checked-in" &&
+      [
+        r.qrCode,
+        r.qrCodeId,
+        r.evacueeNumber,
+        r.evacueeId,
+      ].some((candidate) => normalizeQrCodeForCompare(candidate) === normalizedQrCode)
   );
   return match ?? null;
 }
@@ -666,6 +711,8 @@ export async function getCitizenByQrCode(
   token: string,
   qrCodeId: string,
 ) {
+  const candidates = buildQrCodeCandidates(qrCodeId);
+  const search = extractQrCodeValue(qrCodeId).replace(/^QR-/i, "");
   const results = await request<Array<{
     id: string;
     userId: string;
@@ -681,10 +728,13 @@ export async function getCitizenByQrCode(
     bloodType?: string;
     medicalConditions?: string;
     createdAt: string;
-  }>>(`/site-manager/citizens?search=${encodeURIComponent(qrCodeId)}`, {}, token);
+  }>>(`/site-manager/citizens?search=${encodeURIComponent(search)}`, {}, token);
 
   // search is broad — narrow down to exact qr_code_id match
-  return results.find((c) => c.qrCodeId === qrCodeId) ?? null;
+  const normalizedCandidates = candidates.map(normalizeQrCodeForCompare);
+  return results.find((c) =>
+    normalizedCandidates.includes(normalizeQrCodeForCompare(c.qrCodeId))
+  ) ?? null;
 }
 
 /**
@@ -804,6 +854,21 @@ export interface FamilyGroup {
   familyName?: string;
   members: FamilyGroupMember[];
   createdAt: string;
+}
+
+export async function getSiteManagerFamilyGroupByQrCode(
+  token: string,
+  qrCode: string,
+): Promise<FamilyGroup | null> {
+  try {
+    return await request<FamilyGroup>(
+      `/site-manager/family-group?qrCode=${encodeURIComponent(qrCode)}`,
+      {},
+      token,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function getFamilyGroup(token: string): Promise<FamilyGroup | null> {

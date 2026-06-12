@@ -1,5 +1,6 @@
 export enum AppRole {
   LINE_MANAGER = "line_manager",
+  SITE_MANAGER = "site_manager",
   CITIZEN = "citizen",
 }
 
@@ -117,6 +118,9 @@ export interface CheckInRecord {
   location: string;
   status: string;
   checkInTime?: string;
+  qrCode?: string;
+  familyHead?: string;
+  familySize?: number;
 }
 
 export interface IncidentReport {
@@ -130,6 +134,17 @@ export interface IncidentReport {
   status: string;
   attachmentKeys: string[];
   createdAt: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  type: string;
+  verified: boolean;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  createdAt?: string;
 }
 
 export type PortalRole = "site_manager" | "citizen";
