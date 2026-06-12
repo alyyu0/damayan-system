@@ -244,9 +244,11 @@ export class AuthService {
       throw new BadRequestException(profileError.message);
     }
 
-    // If a profile exists, use its role; otherwise, default to citizen for general access
-    const userRole = (profile?.role as string) || 'citizen';
+    // Prefer the profile role, but fall back to auth metadata for legacy/manual
+    // accounts that were created before a user_profiles row existed.
+    const userRole = this.resolveUserRole(profile?.role, data.user);
     const requiredRole = loginDto.requiredRole as string | undefined;
+    const normalizedRequiredRole = this.normalizeAppRole(requiredRole);
 
     this.logger.debug(
       `Verifying access: userRole='${userRole}', requiredRole='${requiredRole}'`,
@@ -256,8 +258,8 @@ export class AuthService {
     // 1. Found no profile (userRole defaulted to citizen)
     // 2. The role doesn't match
     // ...then we must block access.
-    if (requiredRole && (!profile || userRole !== requiredRole)) {
-      const displayRole = requiredRole.replace('line_manager', 'site manager').replace('_', ' ');
+    if (normalizedRequiredRole && userRole !== normalizedRequiredRole) {
+      const displayRole = normalizedRequiredRole.replace('line_manager', 'site manager').replace('_', ' ');
       throw new UnauthorizedException(
         `This account does not have ${displayRole} access.`,
       );
@@ -284,7 +286,7 @@ export class AuthService {
         name: `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim(),
         email: loginDto.email,
         phone: profile?.phone ?? '',
-        role: (profile?.role as AppRole | undefined) ?? AppRole.CITIZEN,
+        role: userRole,
         accountStatus: (profile?.status as string | undefined) ?? 'active',
       },
     };
@@ -318,7 +320,9 @@ export class AuthService {
     }
 
     const resolvedProfile = profile as UserProfileRow | null;
-    const email = authUser?.user?.email ?? '';
+    const resolvedAuthUser = authUser?.user;
+    const email = resolvedAuthUser?.email ?? '';
+    const userRole = this.resolveUserRole(resolvedProfile?.role, resolvedAuthUser);
 
     return {
       user: {
@@ -329,7 +333,7 @@ export class AuthService {
         name: `${resolvedProfile?.first_name ?? ''} ${resolvedProfile?.last_name ?? ''}`.trim(),
         email,
         phone: resolvedProfile?.phone ?? '',
-        role: (resolvedProfile?.role as AppRole | undefined) ?? AppRole.CITIZEN,
+        role: userRole,
         accountStatus: (resolvedProfile?.status as string | undefined) ?? 'active',
         profilePhotoKey: resolvedProfile?.profile_photo_key ?? null,
         gender: resolvedProfile?.gender ?? null,
@@ -425,6 +429,36 @@ export class AuthService {
         clearTimeout(timeoutHandle);
       }
     }
+  }
+
+  private resolveUserRole(profileRole: string | null | undefined, authUser?: any): AppRole {
+    const candidates = [
+      profileRole,
+      authUser?.user_metadata?.role,
+      authUser?.app_metadata?.role,
+    ];
+
+    for (const candidate of candidates) {
+      const role = this.normalizeAppRole(candidate);
+      if (role) {
+        return role;
+      }
+    }
+
+    return AppRole.CITIZEN;
+  }
+
+  private normalizeAppRole(role: unknown): AppRole | null {
+    const value = typeof role === 'string'
+      ? role.trim().toLowerCase().replace(/[\s-]+/g, '_')
+      : '';
+    if (value === 'site_manager' || value === 'sitemanager') {
+      return AppRole.LINE_MANAGER;
+    }
+
+    return Object.values(AppRole).includes(value as AppRole)
+      ? (value as AppRole)
+      : null;
   }
 
   private async signInWithRetry(

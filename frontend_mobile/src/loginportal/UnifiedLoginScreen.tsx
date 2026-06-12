@@ -19,17 +19,20 @@ import { fonts } from "../theme";
 import { login, ApiError, forgotPassword } from "../api";
 import { saveSession } from "../session";
 import { AppRole } from "../types";
+import { isCitizenRole, isSiteManagerRole, type MobileAppRole } from "../roles";
 
 const HERO_BG = "#1c3d22";
 const ACCENT = "#2E7D32";
 const GOLD = "#FFB300";
-const ALLOWED_ROLES: AppRole[] = [AppRole.CITIZEN, AppRole.LINE_MANAGER];
+function hasMobilePortalAccess(role: string | null | undefined): boolean {
+  return isCitizenRole(role) || isSiteManagerRole(role);
+}
 
 export function UnifiedLoginScreen({
   onLoginSuccess,
   onCreateAccount,
 }: {
-  onLoginSuccess: (role: AppRole) => void;
+  onLoginSuccess: (role: MobileAppRole) => void;
   onCreateAccount?: () => void;
 }) {
   const [email, setEmail] = useState("");
@@ -76,8 +79,8 @@ export function UnifiedLoginScreen({
     try {
       setLoading(true);
       const result = await login({ email: email.trim().toLowerCase(), password });
-      const role = result.user.role;
-      if (!ALLOWED_ROLES.includes(role)) {
+      const role = result.user.role as MobileAppRole;
+      if (!hasMobilePortalAccess(role)) {
         setError("Access denied. This app is for Site Managers and Affected Citizens only.");
         return;
       }
@@ -89,7 +92,11 @@ export function UnifiedLoginScreen({
       await saveSession({
         accessToken,
         expiresIn: result.expiresIn,
-        user: { ...result.user, authUserId: result.user.id },
+        user: {
+          ...result.user,
+          role: role as AppRole,
+          authUserId: result.user.authUserId ?? result.user.id,
+        },
       });
       onLoginSuccess(role);
     } catch (caughtError) {

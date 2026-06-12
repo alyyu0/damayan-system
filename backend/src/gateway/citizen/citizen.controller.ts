@@ -22,6 +22,27 @@ import { DisasterEventsService } from '../../disaster-events/disaster-events.ser
 import { FamilyGroupsService } from '../../family-groups/family-groups.service.js';
 import { generateQrCodeId } from '../../utils/qr-utils.js';
 
+function extractQrCodeValue(value: string): string {
+  const raw = value.trim();
+  const queryMatch = /[?&]qrCode=([^&#]+)/i.exec(raw);
+  if (!queryMatch?.[1]) {
+    return raw;
+  }
+
+  try {
+    return decodeURIComponent(queryMatch[1]).trim();
+  } catch {
+    return queryMatch[1].trim();
+  }
+}
+
+function normalizeQrCode(value: string | null | undefined): string {
+  return extractQrCodeValue(value ?? '')
+    .replace(/^QR-/i, '')
+    .trim()
+    .toUpperCase();
+}
+
 @Controller('citizen')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(AppRole.CITIZEN)
@@ -183,8 +204,10 @@ export class CitizenController {
   @Get('lookup-citizen')
   async lookupCitizen(@Query('qrCode') qrCode: string) {
     if (!qrCode) return null;
-    const citizens = await this.registrationsService.findCitizens(qrCode);
-    return citizens.find((c) => c.qrCodeId === qrCode) ?? null;
+    const normalizedQrCode = normalizeQrCode(qrCode);
+    const search = extractQrCodeValue(qrCode).replace(/^QR-/i, '');
+    const citizens = await this.registrationsService.findCitizens(search);
+    return citizens.find((c) => normalizeQrCode(c.qrCodeId) === normalizedQrCode) ?? null;
   }
 
   // ─── Incident report ─────────────────────────────────────────────────────

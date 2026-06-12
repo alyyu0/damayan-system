@@ -30,14 +30,25 @@ export function buildQRPayload(qrCodeId: string): string {
 
 /**
  * Parses a raw string scanned from a QR image.
- * Strips the legacy "QR-" prefix if present (matches backend behaviour).
+ * Preserves the scanned QR identifier. Backend/API helpers handle legacy
+ * variants such as QR-CITIZEN-0001 and CITIZEN-0001.
  *
  * @returns the clean qr_code_id string, or null if empty/invalid
  */
 export function parseScannedPayload(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  return trimmed.startsWith("QR-") ? trimmed.slice(3) : trimmed;
+
+  const queryMatch = /[?&]qrCode=([^&#]+)/i.exec(trimmed);
+  if (queryMatch?.[1]) {
+    try {
+      return decodeURIComponent(queryMatch[1]).trim() || null;
+    } catch {
+      return queryMatch[1].trim() || null;
+    }
+  }
+
+  return trimmed;
 }
 
 /**

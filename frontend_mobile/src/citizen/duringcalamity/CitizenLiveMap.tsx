@@ -18,6 +18,7 @@ export interface CitizenLiveMapProps {
   evacCenters: EvacCenter[];
   selectedCenter: EvacCenter;
   onCenterSelect?: (center: EvacCenter) => void;
+  routeCoords?: Array<{ latitude: number; longitude: number }>;
 }
 
 export function CitizenLiveMap({ mode, userLocation, selectedCenter }: CitizenLiveMapProps) {

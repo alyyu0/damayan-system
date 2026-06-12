@@ -16,15 +16,17 @@ import { CitizenProfileEditScreen } from "./CitizenProfileEditScreen";
 import { CitizenFamilyGroupScreen } from "./familygroup/CitizenFamilyGroupScreen";
 import { useSystemPhase } from "../context/SystemPhaseContext";
 import type { AuthSession } from "../types";
+import { isSiteManagerRole } from "../roles";
 
 export type Phase = "before" | "during" | "after";
 export type NavDestination = "Overview" | "Family & ID" | "Safety Map";
 
 interface CitizenDashboardScreenProps {
   onSignOut: () => void;
+  onSiteManagerSession?: () => void;
 }
 
-export default function CitizenDashboardScreen({ onSignOut }: CitizenDashboardScreenProps) {
+export default function CitizenDashboardScreen({ onSignOut, onSiteManagerSession }: CitizenDashboardScreenProps) {
   // Phase is driven by the global system state, but can be locally overridden via bottom tabs
   const { citizenPhase: systemPhase } = useSystemPhase();
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
@@ -47,6 +49,11 @@ export default function CitizenDashboardScreen({ onSignOut }: CitizenDashboardSc
       const activeSession = await loadSession();
       if (!activeSession) {
         onSignOut();
+        return;
+      }
+
+      if (isSiteManagerRole(activeSession.user.role)) {
+        onSiteManagerSession?.();
         return;
       }
 
@@ -595,4 +602,3 @@ const getStyles = (theme: any) => StyleSheet.create({
     color: theme.primary,
   },
 });
-

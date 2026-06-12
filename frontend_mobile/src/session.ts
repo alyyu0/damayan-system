@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AuthSession } from "./types";
+import { AppRole } from "./types";
+import { isSiteManagerRole } from "./roles";
 
 const SESSION_KEY = "damayan.mobile.session";
 
@@ -34,5 +36,8 @@ export async function clearSession(): Promise<void> {
 
 export function hasRole(session: AuthSession | null, requiredRole: string): boolean {
   if (!session) return false;
+  if (requiredRole === AppRole.LINE_MANAGER || requiredRole === AppRole.SITE_MANAGER || requiredRole === "site_manager") {
+    return isSiteManagerRole(session.user.role);
+  }
   return session.user.role === requiredRole;
 }

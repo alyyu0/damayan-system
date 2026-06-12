@@ -16,7 +16,7 @@ import {
 import { UnifiedLoginScreen } from "./src/loginportal";
 import { SiteManagerBeforeScreen, SiteManagerDuringScreen, SiteManagerSignupScreen, SiteManagerDashboardScreen } from "./src/site-manager";
 import type { AppRoute } from "./src/types";
-import { AppRole } from "./src/types";
+import { isCitizenRole, isSiteManagerRole } from "./src/roles";
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>("login");
@@ -68,8 +68,8 @@ function AppContent({
           <StatusBar style="dark" />
           <UnifiedLoginScreen
             onLoginSuccess={(role) => {
-              if (role === AppRole.CITIZEN) setRoute("citizen-dashboard");
-              else if (role === AppRole.LINE_MANAGER) setRoute("site-manager-before");
+              if (isSiteManagerRole(role)) setRoute("site-manager-before");
+              else if (isCitizenRole(role)) setRoute("citizen-dashboard");
             }}
             onCreateAccount={() => setRoute("citizen-signup")}
           />
@@ -111,6 +111,7 @@ function AppContent({
           <StatusBar style="dark" />
           <CitizenDashboardScreen
             onSignOut={() => setRoute("login")}
+            onSiteManagerSession={() => setRoute("site-manager-before")}
           />
         </>
       );
@@ -120,8 +121,8 @@ function AppContent({
           <StatusBar style="dark" />
           <UnifiedLoginScreen
             onLoginSuccess={(role) => {
-              if (role === AppRole.CITIZEN) setRoute("citizen-dashboard");
-              else if (role === AppRole.LINE_MANAGER) setRoute("site-manager-before");
+              if (isSiteManagerRole(role)) setRoute("site-manager-before");
+              else if (isCitizenRole(role)) setRoute("citizen-dashboard");
             }}
             onCreateAccount={() => setRoute("citizen-signup")}
           />
