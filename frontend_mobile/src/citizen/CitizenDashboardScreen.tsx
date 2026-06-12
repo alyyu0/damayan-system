@@ -28,6 +28,7 @@ interface CitizenDashboardScreenProps {
 }
 
 export default function CitizenDashboardScreen({ onSignOut, onSiteManagerSession }: Readonly<CitizenDashboardScreenProps>) {
+  // Phase is driven by the global system state, but can be locally overridden via bottom tabs
   const { citizenPhase: systemPhase, refreshPhase } = useSystemPhase();
   const [phaseOverride, setPhaseOverride] = useState<Phase | null>(null);
   const phase = phaseOverride || systemPhase;
@@ -48,6 +49,11 @@ export default function CitizenDashboardScreen({ onSignOut, onSiteManagerSession
       const activeSession = await loadSession();
       if (!activeSession) {
         onSignOut();
+        return;
+      }
+
+      if (isSiteManagerRole(activeSession.user.role)) {
+        onSiteManagerSession?.();
         return;
       }
 
@@ -463,239 +469,235 @@ export default function CitizenDashboardScreen({ onSignOut, onSiteManagerSession
   );
 }
 
-const STATUS_BAR_HEIGHT = Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 24) : 44;
-
-const getStyles = (theme: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.bg,
-    },
-    // Header uses explicit paddingTop so that content sits below the system status bar
-    // on both iOS and Android without needing react-native-safe-area-context.
-    headerSafe: {
-      backgroundColor: theme.surface + "CC",
-      borderBottomWidth: 1,
-      borderBottomColor: theme.line,
-      paddingTop: STATUS_BAR_HEIGHT,
-    },
-    headerInner: {
-      height: 58,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-    },
-    headerLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      flex: 1,
-    },
-    headerLogo: {
-      width: 28,
-      height: 28,
-    },
-    headerRight: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    brandText: {
-      ...fonts.black,
-      fontSize: 15,
-      color: theme.text,
-      letterSpacing: -0.5,
-    },
-    phaseIndicator: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 20,
-      marginTop: 1,
-      borderWidth: 1,
-      borderColor: "rgba(0,0,0,0.03)",
-    },
-    phaseText: {
-      ...fonts.black,
-      fontSize: 8,
-      textTransform: "uppercase",
-      letterSpacing: 1.5,
-    },
-    orb: {
-      position: "absolute",
-      borderRadius: 999,
-      opacity: 0.08,
-    },
-    orb1: {
-      width: 350,
-      height: 350,
-      top: -100,
-      right: -100,
-    },
-    orb2: {
-      width: 250,
-      height: 250,
-      bottom: 100,
-      left: -100,
-      backgroundColor: theme.secondary,
-    },
-    avatarContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    avatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 13,
-      backgroundColor: theme.surface,
-      borderWidth: 1.5,
-      borderColor: theme.line,
-      overflow: "hidden",
-      shadowColor: "#000",
-      shadowOpacity: 0.05,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-    },
-    avatarImage: {
-      width: "100%",
-      height: "100%",
-    },
-    avatarInitials: {
-      width: "100%",
-      height: "100%",
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    avatarInitialsText: {
-      color: "#fff",
-      fontWeight: "900",
-      fontSize: 16,
-    },
-    content: {
-      flex: 1,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.15)",
-      justifyContent: "flex-start",
-      alignItems: "flex-end",
-      paddingTop: 80,
-      paddingRight: 24,
-    },
-    profileDropdown: {
-      width: 260,
-      backgroundColor: theme.surface,
-      borderRadius: 32,
-      paddingVertical: 20,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 15 },
-      shadowOpacity: 0.12,
-      shadowRadius: 30,
-      elevation: 12,
-      borderWidth: 1,
-      borderColor: theme.line,
-    },
-    profileHeader: {
-      paddingHorizontal: 24,
-      paddingBottom: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.line,
-    },
-    profileName: {
-      ...fonts.black,
-      fontSize: 18,
-      color: theme.text,
-      letterSpacing: -0.5,
-    },
-    profileSub: {
-      ...fonts.bold,
-      fontSize: 11,
-      color: theme.textLight,
-      textTransform: "uppercase",
-      letterSpacing: 1.5,
-      marginTop: 4,
-    },
-    profileActions: {
-      padding: 12,
-    },
-    profileActionItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 14,
-      padding: 14,
-      borderRadius: 16,
-    },
-    themeToggleIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(0,0,0,0.04)",
-    },
-    profileActionText: {
-      ...fonts.bold,
-      fontSize: 15,
-      color: theme.textMuted,
-    },
-    divider: {
-      height: 1,
-      backgroundColor: theme.line,
-      marginVertical: 12,
-      marginHorizontal: 16,
-    },
-    bottomNavWrapper: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      paddingHorizontal: 20,
-      paddingBottom: Platform.OS === "ios" ? 32 : 16,
-      paddingTop: 8,
-    },
-    bottomNavInner: {
-      flexDirection: "row",
-      backgroundColor: theme.surface + "F2",
-      borderRadius: 32,
-      height: 70,
-      alignItems: "center",
-      justifyContent: "space-around",
-      paddingHorizontal: 12,
-      borderWidth: 1,
-      borderColor: "rgba(255, 255, 255, 0.2)",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 15 },
-      shadowOpacity: 0.1,
-      shadowRadius: 25,
-      elevation: 15,
-    },
-    navTab: {
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 4,
-      flex: 1,
-    },
-    tabIconWrap: {
-      width: 44,
-      height: 30,
-      borderRadius: 15,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    tabIconWrapActive: {
-      backgroundColor: theme.primarySoft,
-    },
-    tabLabel: {
-      fontSize: 10,
-      ...fonts.bold,
-      color: theme.textLight,
-      letterSpacing: 0.5,
-    },
-    tabLabelActive: {
-      color: theme.primary,
-    },
-  });
+const getStyles = (theme: any) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.bg,
+  },
+  headerSafe: {
+    backgroundColor: theme.surface + "CC", // 80% opacity
+    borderBottomWidth: 1,
+    borderBottomColor: theme.line,
+  },
+  headerInner: {
+    height: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  headerLogo: {
+    width: 36,
+    height: 36,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  brandText: {
+    ...fonts.black,
+    fontSize: 18,
+    color: theme.text,
+    letterSpacing: -1,
+  },
+  phaseIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.03)",
+  },
+  phaseText: {
+    ...fonts.black,
+    fontSize: 9,
+    textTransform: "uppercase",
+    letterSpacing: 2,
+  },
+  orb: {
+    position: "absolute",
+    borderRadius: 999,
+    opacity: 0.08,
+  },
+  orb1: {
+    width: 350,
+    height: 350,
+    top: -100,
+    right: -100,
+  },
+  orb2: {
+    width: 250,
+    height: 250,
+    bottom: 100,
+    left: -100,
+    backgroundColor: theme.secondary,
+  },
+  avatarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: theme.surface,
+    borderWidth: 1.5,
+    borderColor: theme.line,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+  },
+  avatarInitials: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: theme.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitialsText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 16,
+  },
+  content: {
+    flex: 1,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+    paddingTop: 80,
+    paddingRight: 24,
+  },
+  profileDropdown: {
+    width: 260,
+    backgroundColor: theme.surface,
+    borderRadius: 32,
+    paddingVertical: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.12,
+    shadowRadius: 30,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: theme.line,
+  },
+  profileHeader: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.line,
+  },
+  profileName: {
+    ...fonts.black,
+    fontSize: 18,
+    color: theme.text,
+    letterSpacing: -0.5,
+  },
+  profileSub: {
+    ...fonts.bold,
+    fontSize: 11,
+    color: theme.textLight,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginTop: 4,
+  },
+  profileActions: {
+    padding: 12,
+  },
+  profileActionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 14,
+    borderRadius: 16,
+  },
+  profileActionText: {
+    ...fonts.bold,
+    fontSize: 15,
+    color: theme.textMuted,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: theme.line,
+    marginVertical: 12,
+    marginHorizontal: 16,
+  },
+  // Premium Bottom Nav Styles
+  bottomNavWrapper: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingTop: 10,
+  },
+  bottomNavInner: {
+    flexDirection: "row",
+    backgroundColor: theme.surface + "F2", // 95% opacity
+    borderRadius: 36,
+    height: 84,
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.1,
+    shadowRadius: 25,
+    elevation: 15,
+  },
+  navTab: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    flex: 1,
+  },
+  tabIconWrap: {
+    width: 52,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabIconWrapActive: {
+    backgroundColor: theme.primarySoft,
+  },
+  tabLabel: {
+    fontSize: 11,
+    ...fonts.bold,
+    color: theme.textLight,
+    letterSpacing: 0.5,
+  },
+  tabLabelActive: {
+    color: theme.primary,
+  },
+  themeToggleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.04)",
+  },
+});

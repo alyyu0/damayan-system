@@ -156,7 +156,7 @@ export function SiteManagerDuringScreen({
     }
 
     try {
-      // Look up citizen profile (same as web getCitizenByQrCode)
+      // Look up individual citizen first, then shared family QR.
       const citizen = await getCitizenByQrCode(session.accessToken, qrCodeId);
 
       if (!citizen) {
