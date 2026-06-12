@@ -5,6 +5,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import QRCode from "react-native-qrcode-svg";
 import { Screen, Pill, SectionCard } from "../../../components/UI";
 import { theme, fonts, lightTheme, darkTheme } from "../../../theme";
+import { getActiveDisasterEvents } from "../../../api";
+import type { DisasterEvent } from "../../../types";
 import {
   CitizenPreparednessTopBar,
   citizenStyles,
@@ -103,6 +105,7 @@ export function CitizenBeforeScreen({
   qrCodeId,
   registrationType,
   profilePhotoUrl,
+  session,
 }: {
   onBack: () => void;
   onOpenResponse: () => void;
@@ -117,13 +120,24 @@ export function CitizenBeforeScreen({
   qrCodeId?: string;
   registrationType?: string;
   profilePhotoUrl?: string;
+  session?: any;
 }) {
   const [step, setStep] = React.useState(initialStep);
   const [safetyPlanOpen, setSafetyPlanOpen] = useState(false);
-  
+  const [activeDisaster, setActiveDisaster] = useState<DisasterEvent | null>(null);
+
   useEffect(() => {
     setStep(initialStep);
   }, [initialStep]);
+
+  // Fetch live disaster event so the alert card shows real data
+  useEffect(() => {
+    if (!session?.accessToken) return;
+    getActiveDisasterEvents(session.accessToken).then((events) => {
+      const active = events.find((e) => e.status === "active" || e.status === "DURING") ?? events[0] ?? null;
+      setActiveDisaster(active);
+    });
+  }, [session?.accessToken]);
 
   const currentTheme = isDarkMode ? darkTheme : lightTheme;
   const localStyles = getStyles(currentTheme);
@@ -301,12 +315,24 @@ export function CitizenBeforeScreen({
 
            <View style={localStyles.alertCard}>
               <Ionicons name="warning" size={24} color="#fff" style={{ marginBottom: 12 }} />
-              <Text style={localStyles.alertTitle}>Typhoon Amang</Text>
-              <Text style={localStyles.alertMeta}>LEVEL 2 ALERT • 72H ETA</Text>
-              <Text style={localStyles.alertDesc}>Expected landfall in northern sector. Review evacuation routes now.</Text>
-              <TouchableOpacity style={localStyles.viewPlanBtn} onPress={() => setSafetyPlanOpen(true)}>
-                 <Text style={localStyles.viewPlanText}>VIEW SAFETY PLAN</Text>
-              </TouchableOpacity>
+              <Text style={localStyles.alertTitle}>
+                {activeDisaster ? activeDisaster.name : "No Active Alert"}
+              </Text>
+              <Text style={localStyles.alertMeta}>
+                {activeDisaster
+                  ? `${activeDisaster.severityLevel?.toUpperCase() ?? "ADVISORY"} • ${activeDisaster.type?.toUpperCase() ?? "DISASTER"}`
+                  : "SYSTEM MONITORING ACTIVE"}
+              </Text>
+              <Text style={localStyles.alertDesc}>
+                {activeDisaster
+                  ? `Affected areas: ${activeDisaster.affectedAreas?.join(", ") || activeDisaster.province || "See official advisories"}. Review evacuation routes now.`
+                  : "No active disaster event. Stay prepared and review your safety checklist."}
+              </Text>
+              {activeDisaster && (
+                <TouchableOpacity style={localStyles.viewPlanBtn} onPress={() => setSafetyPlanOpen(true)}>
+                  <Text style={localStyles.viewPlanText}>VIEW SAFETY PLAN</Text>
+                </TouchableOpacity>
+              )}
            </View>
         </View>
       </View>
@@ -425,17 +451,19 @@ export function CitizenBeforeScreen({
         </View>
       </Modal>
 
-      {/* Premium Typhoon Safety Plan Modal */}
+      {/* Crisis Safety Plan Modal — driven by live disaster event */}
       <Modal visible={safetyPlanOpen} transparent animationType="slide" onRequestClose={() => setSafetyPlanOpen(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
           <View style={{ backgroundColor: currentTheme.bg || "#fff", borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 32, paddingBottom: 40, height: "85%", borderTopWidth: 1, borderColor: "rgba(0,0,0,0.05)" }}>
-            
+
             {/* Header */}
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#E65100" }} />
-                  <Text style={{ fontSize: 10, ...fonts.black, color: "#E65100", letterSpacing: 1.5 }}>TYPHOON AMANG PROTOCOL</Text>
+                  <Text style={{ fontSize: 10, ...fonts.black, color: "#E65100", letterSpacing: 1.5 }}>
+                    {activeDisaster ? `${activeDisaster.name.toUpperCase()} PROTOCOL` : "CRISIS PROTOCOL"}
+                  </Text>
                 </View>
                 <Text style={{ fontSize: 24, ...fonts.black, color: currentTheme.text || "#1A1C1A" }}>Crisis Safety Plan</Text>
               </View>
@@ -445,33 +473,36 @@ export function CitizenBeforeScreen({
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-              
+
               {/* Emergency Status Card */}
               <View style={{ backgroundColor: "#FFF3E0", borderRadius: 24, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: "#FFE0B2", flexDirection: "row", gap: 14, alignItems: "center" }}>
                 <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "#FFE0B2", alignItems: "center", justifyContent: "center" }}>
                   <Ionicons name="shield-half-outline" size={32} color="#E65100" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, ...fonts.black, color: "#E65100" }}>Level 2 Alert Active</Text>
+                  <Text style={{ fontSize: 15, ...fonts.black, color: "#E65100" }}>
+                    {activeDisaster ? `${activeDisaster.severityLevel ?? "Advisory"} — ${activeDisaster.type}` : "Advisory Active"}
+                  </Text>
                   <Text style={{ fontSize: 12, ...fonts.medium, color: "#B78103", marginTop: 2, lineHeight: 16 }}>
-                    Northern sector expects landfall in 72 hours. Evacuation lines are active.
+                    {activeDisaster
+                      ? `Affecting: ${activeDisaster.affectedAreas?.join(", ") || activeDisaster.province || "See official advisories"}. Evacuation lines are active.`
+                      : "Monitor official advisories and follow barangay instructions."}
                   </Text>
                 </View>
               </View>
 
-              {/* Section 1: Evacuation Go-Bag checklist */}
+              {/* Section 1: Evacuation Go-Bag checklist (universal — not event-specific) */}
               <View style={{ marginBottom: 28 }}>
                 <Text style={{ fontSize: 14, ...fonts.black, color: currentTheme.text || "#1A1C1A", marginBottom: 16, letterSpacing: -0.2 }}>
                   72-Hour Evacuation Go-Bag Checklist
                 </Text>
-                
                 {[
                   { icon: "water-outline", label: "3-day supply of water (1 gallon per person/day)" },
                   { icon: "fast-food-outline", label: "Non-perishable food (easy-to-open canned goods)" },
                   { icon: "bandage-outline", label: "First-aid kit & critical daily prescription medicines" },
                   { icon: "flashlight-outline", label: "Battery-operated flashlight & emergency radio" },
                   { icon: "battery-charging-outline", label: "Fully-charged power banks & charger cables" },
-                  { icon: "qr-code-outline", label: "Damayan Digital QR ID & physical identification documents" }
+                  { icon: "qr-code-outline", label: "Damayan Digital QR ID & physical identification documents" },
                 ].map((item, idx) => (
                   <View key={idx} style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.03)" }}>
                     <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.02)", alignItems: "center", justifyContent: "center" }}>
@@ -482,30 +513,35 @@ export function CitizenBeforeScreen({
                 ))}
               </View>
 
-              {/* Section 2: Evacuation Shelters */}
+              {/* Section 2: Evacuation Shelters — live affected areas or fallback prompt */}
               <View style={{ marginBottom: 28 }}>
                 <Text style={{ fontSize: 14, ...fonts.black, color: currentTheme.text || "#1A1C1A", marginBottom: 16, letterSpacing: -0.2 }}>
                   Designated Evacuation Shelters
                 </Text>
-                
                 <View style={{ gap: 12 }}>
-                  <View style={{ backgroundColor: currentTheme.surface || "#fff", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.05)" }}>
-                    <Text style={{ fontSize: 14, ...fonts.black, color: currentTheme.text || "#1A1C1A" }}>Primary: Bicol Sector Central HS</Text>
-                    <Text style={{ fontSize: 11, ...fonts.medium, color: currentTheme.textLight || "#7e887e", marginTop: 4 }}>Evacuation route: Main Highway North → Sector 2 Exit</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, backgroundColor: "#E8F5E9", alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#2E7D32" }} />
-                      <Text style={{ fontSize: 9, ...fonts.black, color: "#2E7D32" }}>CAPACITY: 85% AVAILABLE</Text>
-                    </View>
-                  </View>
-
-                  <View style={{ backgroundColor: currentTheme.surface || "#fff", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.05)" }}>
-                    <Text style={{ fontSize: 14, ...fonts.black, color: currentTheme.text || "#1A1C1A" }}>Secondary: Barangay 102 Dome</Text>
-                    <Text style={{ fontSize: 11, ...fonts.medium, color: currentTheme.textLight || "#7e887e", marginTop: 4 }}>Evacuation route: Rizal Ave East → District 4 Dome Link</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, backgroundColor: "#E8F5E9", alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#2E7D32" }} />
-                      <Text style={{ fontSize: 9, ...fonts.black, color: "#2E7D32" }}>CAPACITY: 95% AVAILABLE</Text>
-                    </View>
-                  </View>
+                  {activeDisaster?.affectedAreas && activeDisaster.affectedAreas.length > 0
+                    ? activeDisaster.affectedAreas.slice(0, 3).map((area, idx) => (
+                        <View key={idx} style={{ backgroundColor: currentTheme.surface || "#fff", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.05)" }}>
+                          <Text style={{ fontSize: 14, ...fonts.black, color: currentTheme.text || "#1A1C1A" }}>
+                            {idx === 0 ? "Primary" : idx === 1 ? "Secondary" : "Tertiary"}: {area} Evacuation Center
+                          </Text>
+                          <Text style={{ fontSize: 11, ...fonts.medium, color: currentTheme.textLight || "#7e887e", marginTop: 4 }}>
+                            Contact your barangay hall for the nearest open shelter in {area}.
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, backgroundColor: "#E8F5E9", alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#2E7D32" }} />
+                            <Text style={{ fontSize: 9, ...fonts.black, color: "#2E7D32" }}>USE SAFETY MAP TAB FOR LIVE CAPACITY</Text>
+                          </View>
+                        </View>
+                      ))
+                    : (
+                        <View style={{ backgroundColor: currentTheme.surface || "#fff", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "rgba(0,0,0,0.05)" }}>
+                          <Text style={{ fontSize: 14, ...fonts.black, color: currentTheme.text || "#1A1C1A" }}>Check Safety Map for Live Shelters</Text>
+                          <Text style={{ fontSize: 11, ...fonts.medium, color: currentTheme.textLight || "#7e887e", marginTop: 4 }}>
+                            Use the Safety Map tab to see registered evacuation centers with live capacity in your area.
+                          </Text>
+                        </View>
+                      )}
                 </View>
               </View>
 

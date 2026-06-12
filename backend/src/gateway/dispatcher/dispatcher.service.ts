@@ -178,8 +178,34 @@ export class DispatcherService {
     return this.siteManagerProxyService.deleteIncidentReport(id);
   }
 
-  createDispatchOrder(payload: CreateDispatchOrderDto) {
-    return this.siteManagerProxyService.createDispatchOrder(payload);
+  async createDispatchOrder(payload: CreateDispatchOrderDto) {
+    const order = await this.siteManagerProxyService.createDispatchOrder(payload);
+
+    // Notify the citizen who submitted the incident report
+    if (payload.reportId) {
+      try {
+        const supabase = this.supabaseService.getClient() as any;
+        const { data } = await supabase
+          .from('incident_reports')
+          .select('reported_by')
+          .eq('id', payload.reportId)
+          .maybeSingle();
+        const citizenId: string | null = (data as { reported_by?: string } | null)?.reported_by ?? null;
+        if (citizenId) {
+          void this.inAppNotificationsService.send(
+            citizenId,
+            'Rescue Unit Assigned',
+            'A dispatcher has assigned a rescue unit to your SOS report. Stay in place and await further instructions.',
+            'dispatch_assigned',
+            { dispatchOrderId: order?.id },
+          );
+        }
+      } catch {
+        // non-fatal — dispatch order was already created
+      }
+    }
+
+    return order;
   }
 
   findDispatchOrders(search?: string, operationId?: string, disasterId?: string) {
@@ -333,7 +359,7 @@ export class DispatcherService {
 
   private buildBadge(profile: DispatcherProfileRow): string {
     const source = profile.id || profile.auth_user_id;
-    return `DS-${source.replace(/-/g, '').slice(-4).toUpperCase()}`;
+    return `DS-${source.replaceAll('-', '').slice(-4).toUpperCase()}`;
   }
 
   private resolveRank(totalDispatches: number): string {

@@ -1,6 +1,5 @@
 // Web fallback — react-native-maps is native-only.
 // Metro resolves CitizenLiveMap.native.tsx on iOS/Android and this file on web.
-import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -9,7 +8,9 @@ export interface EvacCenter {
   name: string;
   latitude: number;
   longitude: number;
-  status: "Open" | "Full" | "Closed";
+  status: string;
+  capacity?: number;
+  currentOccupancy?: number;
 }
 
 export interface CitizenLiveMapProps {
@@ -18,9 +19,10 @@ export interface CitizenLiveMapProps {
   evacCenters: EvacCenter[];
   selectedCenter: EvacCenter;
   onCenterSelect?: (center: EvacCenter) => void;
+  routeCoords?: Array<{ latitude: number; longitude: number }>;
 }
 
-export function CitizenLiveMap({ mode, userLocation, selectedCenter }: CitizenLiveMapProps) {
+export function CitizenLiveMap({ mode, userLocation, selectedCenter, routeCoords: _routeCoords }: Readonly<CitizenLiveMapProps>) {
   return (
     <View style={styles.container}>
       <Ionicons name="map-outline" size={32} color="#81C784" />

@@ -520,6 +520,27 @@ export async function deleteRegionAssignment(token: string, regionId: string, as
   }, token);
 }
 
+export async function createEvacuationCenter(token: string, payload: {
+  name: string;
+  address?: string;
+  barangay?: string;
+  municipality?: string;
+  capacity?: number;
+  facilities?: string[];
+  contactPerson?: string;
+  contactPhone?: string;
+  lat?: number;
+  lng?: number;
+  description?: string;
+  maxManagers?: number;
+}) {
+  return request<{ id: string; name: string }>(
+    '/admin/capacity/centers',
+    { method: 'POST', body: JSON.stringify(payload) },
+    token,
+  );
+}
+
 export async function getShelterAssignments(token: string, centerId?: string) {
   const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : '';
   return request<Array<{ id: string; centerId: string; managerId: string; managerName: string; assignedAt: string | null }>>(

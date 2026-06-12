@@ -21,6 +21,7 @@ export const INVENTORY_PATTERNS = {
 export const CAPACITY_PATTERNS = {
   FIND_ALL: 'operations.capacity.find-all',
   GET_STATS: 'operations.capacity.get-stats',
+  CREATE: 'operations.capacity.create',
 } as const;
 
 export const ORGANIZATION_PATTERNS = {

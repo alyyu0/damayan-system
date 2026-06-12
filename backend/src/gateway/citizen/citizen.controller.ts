@@ -103,12 +103,12 @@ export class CitizenController {
 
   @Put('family/:id')
   async updateFamily(@Param('id') id: string, @Body() body: any) {
-    return this.citizenProxyService.updateFamily(id, body);
+    return this.registrationsService.updateFamily(id, body);
   }
 
   @Delete('family/member/:id')
   async deleteFamilyMember(@Param('id') id: string) {
-    return this.citizenProxyService.deleteFamily(id);
+    return this.registrationsService.deleteFamily(id);
   }
 
   @Delete('animal')

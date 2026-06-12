@@ -124,6 +124,11 @@ export class OperationsMessageController {
     return this.capacityService.getStats();
   }
 
+  @MessagePattern(CAPACITY_PATTERNS.CREATE)
+  createEvacuationCenter(@Payload() payload: { name: string; address?: string; barangay?: string; municipality?: string; capacity?: number; facilities?: string[]; contactPerson?: string; contactPhone?: string; lat?: number; lng?: number; description?: string; maxManagers?: number }) {
+    return this.capacityService.create(payload);
+  }
+
   @MessagePattern(ORGANIZATION_PATTERNS.FIND_ALL)
   findOrganizations(@Payload() payload: { search?: string }) {
     return this.organizationsService.findAll(payload?.search);

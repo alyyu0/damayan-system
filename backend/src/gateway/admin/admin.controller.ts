@@ -92,6 +92,24 @@ export class AdminController {
     return this.adminProxyService.getCapacityStats();
   }
 
+  @Post('capacity/centers')
+  createEvacuationCenter(@Body() body: {
+    name: string;
+    address?: string;
+    barangay?: string;
+    municipality?: string;
+    capacity?: number;
+    facilities?: string[];
+    contactPerson?: string;
+    contactPhone?: string;
+    lat?: number;
+    lng?: number;
+    description?: string;
+    maxManagers?: number;
+  }) {
+    return this.adminProxyService.createEvacuationCenter(body);
+  }
+
   @Get('organizations')
   findOrganizations(@Query('search') search?: string) {
     return this.adminProxyService.findOrganizations(search);

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/auth/jwt-auth.guard.js';
 import { RolesGuard } from '../common/auth/roles.guard.js';
 import { Roles } from '../common/auth/roles.decorator.js';
@@ -15,8 +15,11 @@ export class SystemSettingsController {
   constructor(@Inject(SystemSettingsService) private readonly systemSettingsService: SystemSettingsService) {}
 
   @Get('phase')
-  getPhase() {
-    return this.systemSettingsService.getPhase();
+  getPhase(
+    @Query('regionId') regionId?: string,
+    @Query('personaRole') personaRole?: string,
+  ) {
+    return this.systemSettingsService.getPhase(regionId, personaRole);
   }
 
   @Patch('phase')

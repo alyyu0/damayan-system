@@ -270,6 +270,25 @@ export class SiteManagerProxyService {
     );
   }
 
+  createEvacuationCenter(dto: {
+    name: string;
+    address?: string;
+    barangay?: string;
+    municipality?: string;
+    capacity?: number;
+    facilities?: string[];
+    contactPerson?: string;
+    contactPhone?: string;
+    lat?: number;
+    lng?: number;
+    description?: string;
+    maxManagers?: number;
+  }) {
+    return firstValueFrom(
+      this.operationsClient.send(CAPACITY_PATTERNS.CREATE, dto),
+    );
+  }
+
   findOrganizations(search?: string) {
     return firstValueFrom(
       this.operationsClient.send(ORGANIZATION_PATTERNS.FIND_ALL, { search }),

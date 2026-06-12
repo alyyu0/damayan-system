@@ -462,6 +462,23 @@ export class AdminProxyService {
     return this.siteManagerProxyService.getCapacityStats();
   }
 
+  createEvacuationCenter(dto: {
+    name: string;
+    address?: string;
+    barangay?: string;
+    municipality?: string;
+    capacity?: number;
+    facilities?: string[];
+    contactPerson?: string;
+    contactPhone?: string;
+    lat?: number;
+    lng?: number;
+    description?: string;
+    maxManagers?: number;
+  }) {
+    return this.siteManagerProxyService.createEvacuationCenter(dto);
+  }
+
   findOrganizations(search?: string) {
     return this.siteManagerProxyService.findOrganizations(search);
   }

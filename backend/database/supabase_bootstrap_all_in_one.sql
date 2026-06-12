@@ -573,11 +573,24 @@ USING (true)
 WITH CHECK (true);
 
 -- -----------------------------------------------------------------------------
+-- Grants for Supabase Realtime (anon client must be able to SELECT these rows)
+-- Without these grants the anon WebSocket client receives no row data from
+-- the realtime publication and the mobile app never sees phase changes.
+-- -----------------------------------------------------------------------------
+GRANT SELECT ON public.system_settings TO anon, authenticated;
+GRANT SELECT ON public.regions TO anon, authenticated;
+GRANT SELECT ON public.region_persona_phase_controls TO anon, authenticated;
+
+-- -----------------------------------------------------------------------------
 -- Realtime registrations
 -- -----------------------------------------------------------------------------
 SELECT public.add_table_to_realtime('public', 'notifications');
 SELECT public.add_table_to_realtime('public', 'drm_alerts');
 SELECT public.add_table_to_realtime('public', 'drm_sos');
+SELECT public.add_table_to_realtime('public', 'system_settings');
+SELECT public.add_table_to_realtime('public', 'regions');
+SELECT public.add_table_to_realtime('public', 'region_persona_phase_controls');
+
 
 -- -----------------------------------------------------------------------------
 -- Baseline seed rows (non-auth)

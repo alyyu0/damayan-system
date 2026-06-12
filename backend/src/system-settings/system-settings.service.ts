@@ -6,7 +6,54 @@ import { SystemPhase } from './dto/update-phase.dto.js';
 export class SystemSettingsService {
   constructor(@Inject(SupabaseService) private readonly supabaseService: SupabaseService) {}
 
-  async getPhase(): Promise<{ currentPhase: SystemPhase; updatedAt: string }> {
+  async getPhase(
+    regionId?: string,
+    personaRole?: string,
+  ): Promise<{ currentPhase: SystemPhase; updatedAt: string }> {
+    // 1. If the caller supplies both regionId and personaRole, check for an active
+    //    regional persona-phase override first.
+    if (regionId && personaRole) {
+      const { data: override } = await this.supabaseService
+        .getClient()
+        .from('region_persona_phase_controls')
+        .select('phase, updated_at')
+        .eq('region_id', regionId)
+        .eq('persona_role', personaRole)
+        .eq('visible_to_assigned_users', true)
+        .maybeSingle();
+
+      if (override?.phase) {
+        return {
+          currentPhase: override.phase as SystemPhase,
+          updatedAt: override.updated_at as string,
+        };
+      }
+    }
+
+    // 1b. If only personaRole is known (e.g. citizens who have no assigned region),
+    //     check for any active override for that persona across all regions.
+    //     The most recently updated override wins, so the admin can set a single
+    //     region's citizen override and it propagates to all citizens.
+    if (personaRole && !regionId) {
+      const { data: override } = await this.supabaseService
+        .getClient()
+        .from('region_persona_phase_controls')
+        .select('phase, updated_at')
+        .eq('persona_role', personaRole)
+        .eq('visible_to_assigned_users', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (override?.phase) {
+        return {
+          currentPhase: override.phase as SystemPhase,
+          updatedAt: override.updated_at as string,
+        };
+      }
+    }
+
+    // 2. Fall back to the global system-settings row.
     const { data, error } = await this.supabaseService
       .getClient()
       .from('system_settings')

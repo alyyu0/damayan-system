@@ -37,6 +37,7 @@ import {
   getShelterAssignments,
   createShelterAssignment,
   deleteShelterAssignment,
+  createEvacuationCenter,
   type AdminApprovalRecord,
 } from "../lib/api";
 import { subscribeToLiveAlerts, type LiveAlertRecord } from "../lib/supabase";
@@ -3742,7 +3743,13 @@ function MiniRegionMap({
     if (!containerRef.current) return;
     if (mapRef.current) return;
 
+    let destroyed = false;
+
     import('leaflet').then((L) => {
+      // Bail out if the effect was cleaned up before the async import resolved
+      // (happens in React StrictMode which unmounts/remounts in dev mode).
+      if (destroyed || !containerRef.current || mapRef.current) return;
+
       // Patch default icon
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -3760,10 +3767,12 @@ function MiniRegionMap({
     });
 
     return () => {
+      destroyed = true;
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, []);
+
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -3919,6 +3928,14 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
   const [managerSearch, setManagerSearch] = useState("");
   const [availableManagers, setAvailableManagers] = useState<Array<{ authUserId: string; name: string; role: string; assignedCenterId?: string | null }>>([]);
   const [loadingManagers, setLoadingManagers] = useState(false);
+  const [newShelterName, setNewShelterName] = useState("");
+  const [newShelterAddress, setNewShelterAddress] = useState("");
+  const [newShelterBarangay, setNewShelterBarangay] = useState("");
+  const [newShelterMunicipality, setNewShelterMunicipality] = useState("");
+  const [newShelterCapacity, setNewShelterCapacity] = useState("");
+  const [newShelterLat, setNewShelterLat] = useState("");
+  const [newShelterLng, setNewShelterLng] = useState("");
+  const [creatingShelter, setCreatingShelter] = useState(false);
 
   const handleCenterPick = useCallback((lat: number, lng: number) => {
     setNewRegionLat(lat.toFixed(6));
@@ -4136,6 +4153,40 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
       setShelterAssignments(list ?? []);
     } catch (err: any) {
       showToast("error", "Remove failed", err?.message ?? "Unable to remove assignment.");
+    }
+  };
+
+  const handleCreateShelter = async () => {
+    if (!authToken) { showToast("error", "Session expired", "Please re-login to continue."); return; }
+    if (!newShelterName.trim()) { showToast("error", "Missing name", "Enter a shelter name."); return; }
+    const cap = newShelterCapacity ? Number(newShelterCapacity) : undefined;
+    if (cap !== undefined && (Number.isNaN(cap) || cap < 1)) { showToast("error", "Invalid capacity", "Capacity must be a positive number."); return; }
+    const lat = newShelterLat ? Number(newShelterLat) : undefined;
+    const lng = newShelterLng ? Number(newShelterLng) : undefined;
+    if (lat !== undefined && (Number.isNaN(lat) || lat < -90 || lat > 90)) { showToast("error", "Invalid latitude", "Latitude must be between -90 and 90."); return; }
+    if (lng !== undefined && (Number.isNaN(lng) || lng < -180 || lng > 180)) { showToast("error", "Invalid longitude", "Longitude must be between -180 and 180."); return; }
+    try {
+      setCreatingShelter(true);
+      await createEvacuationCenter(authToken, {
+        name: newShelterName.trim(),
+        address: newShelterAddress.trim() || undefined,
+        barangay: newShelterBarangay.trim() || undefined,
+        municipality: newShelterMunicipality.trim() || undefined,
+        capacity: cap,
+        lat,
+        lng,
+      });
+      showToast("success", "Shelter created", `${newShelterName.trim()} has been added as an evacuation center.`);
+      setNewShelterName(""); setNewShelterAddress(""); setNewShelterBarangay("");
+      setNewShelterMunicipality(""); setNewShelterCapacity(""); setNewShelterLat(""); setNewShelterLng("");
+      if (regionId) {
+        const list = await getRegionShelters(authToken, regionId);
+        setShelters(list ?? []);
+      }
+    } catch (err: any) {
+      showToast("error", "Create failed", err?.message ?? "Unable to create shelter.");
+    } finally {
+      setCreatingShelter(false);
     }
   };
 
@@ -4571,6 +4622,50 @@ function RegionPersonaControlsPage({ authToken, showToast }: { authToken?: strin
                     <div className="admin-alert info">
                       <span className="admin-alert-icon material-symbols-outlined">info</span>
                       <div>Site Managers are assigned to specific <strong>evacuation centers</strong>, not to regions directly. Select a center in this region, then assign a manager to it.</div>
+                    </div>
+
+                    <div className="admin-card">
+                      <div className="admin-card-header"><div className="admin-card-title">Create New Shelter</div></div>
+                      <div className="admin-card-body">
+                        <div className="admin-form-group">
+                          <label className="admin-form-label">Shelter Name <span style={{ color: "var(--admin-danger)" }}>*</span></label>
+                          <input className="admin-form-input" placeholder="e.g. Barangay 101 Evacuation Center" value={newShelterName} onChange={(e) => setNewShelterName(e.target.value)} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          <div className="admin-form-group">
+                            <label className="admin-form-label">Barangay</label>
+                            <input className="admin-form-input" placeholder="e.g. Sampaloc" value={newShelterBarangay} onChange={(e) => setNewShelterBarangay(e.target.value)} />
+                          </div>
+                          <div className="admin-form-group">
+                            <label className="admin-form-label">Municipality</label>
+                            <input className="admin-form-input" placeholder="e.g. Manila" value={newShelterMunicipality} onChange={(e) => setNewShelterMunicipality(e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="admin-form-group">
+                          <label className="admin-form-label">Address</label>
+                          <input className="admin-form-input" placeholder="e.g. 123 Main St, Barangay 101" value={newShelterAddress} onChange={(e) => setNewShelterAddress(e.target.value)} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                          <div className="admin-form-group">
+                            <label className="admin-form-label">Capacity</label>
+                            <input className="admin-form-input" type="number" min="1" placeholder="e.g. 300" value={newShelterCapacity} onChange={(e) => setNewShelterCapacity(e.target.value)} />
+                          </div>
+                          <div className="admin-form-group">
+                            <label className="admin-form-label">Latitude</label>
+                            <input className="admin-form-input" type="number" step="any" placeholder="e.g. 14.5995" value={newShelterLat} onChange={(e) => setNewShelterLat(e.target.value)} />
+                          </div>
+                          <div className="admin-form-group">
+                            <label className="admin-form-label">Longitude</label>
+                            <input className="admin-form-input" type="number" step="any" placeholder="e.g. 120.9842" value={newShelterLng} onChange={(e) => setNewShelterLng(e.target.value)} />
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+                          <button className="admin-btn admin-btn-accent" onClick={handleCreateShelter} disabled={creatingShelter || !newShelterName.trim()}>
+                            {creatingShelter ? "Creating…" : "Create Shelter"}
+                          </button>
+                          <button className="admin-btn admin-btn-ghost" onClick={() => { setNewShelterName(""); setNewShelterAddress(""); setNewShelterBarangay(""); setNewShelterMunicipality(""); setNewShelterCapacity(""); setNewShelterLat(""); setNewShelterLng(""); }}>Clear</button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="admin-card">

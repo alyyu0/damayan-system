@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   FlatList,
   Modal,
@@ -8,16 +8,19 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../theme";
 import type { AppNotification } from "../api";
 
-const TYPE_ICON: Record<string, string> = {
-  approval_approved: "✓",
-  approval_rejected: "✕",
-  alert: "!",
-  dispatch_assigned: "→",
-  incident_update: "↑",
-  system: "i",
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const TYPE_ICON: Record<string, IoniconName> = {
+  approval_approved: "checkmark-circle",
+  approval_rejected: "close-circle",
+  alert: "alert-circle",
+  dispatch_assigned: "arrow-forward-circle",
+  incident_update: "arrow-up-circle",
+  system: "information-circle",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -51,13 +54,13 @@ export function NotificationBell({
   unreadCount,
   onMarkRead,
   onMarkAllRead,
-}: NotificationBellProps) {
+}: Readonly<NotificationBellProps>) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <Pressable style={styles.bell} onPress={() => setOpen(true)}>
-        <Text style={styles.bellIcon}>🔔</Text>
+        <Ionicons name="notifications-outline" size={22} color={theme.text} />
         {unreadCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>
@@ -89,14 +92,14 @@ export function NotificationBell({
                 </TouchableOpacity>
               )}
               <Pressable onPress={() => setOpen(false)} style={styles.closeBtn}>
-                <Text style={styles.closeText}>✕</Text>
+                <Ionicons name="close" size={16} color={theme.textMuted} />
               </Pressable>
             </View>
           </View>
 
           {notifications.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>🔕</Text>
+              <Ionicons name="notifications-off-outline" size={36} color={theme.textMuted} />
               <Text style={styles.emptyText}>No notifications yet</Text>
             </View>
           ) : (
@@ -117,9 +120,11 @@ export function NotificationBell({
                       { backgroundColor: TYPE_COLOR[item.type] ?? theme.neutral },
                     ]}
                   >
-                    <Text style={styles.typeIconText}>
-                      {TYPE_ICON[item.type] ?? "i"}
-                    </Text>
+                    <Ionicons
+                      name={TYPE_ICON[item.type] ?? "information-circle"}
+                      size={18}
+                      color="#fff"
+                    />
                   </View>
                   <View style={styles.itemBody}>
                     <Text style={styles.itemTitle} numberOfLines={1}>
@@ -149,9 +154,6 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: "center",
     justifyContent: "center",
-  },
-  bellIcon: {
-    fontSize: 22,
   },
   badge: {
     position: "absolute",
@@ -224,11 +226,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  closeText: {
-    color: theme.textMuted,
-    fontSize: 12,
-    fontWeight: "900",
-  },
   list: {
     paddingVertical: 8,
   },
@@ -249,11 +246,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-  },
-  typeIconText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "900",
   },
   itemBody: {
     flex: 1,
@@ -286,9 +278,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 48,
     gap: 12,
-  },
-  emptyIcon: {
-    fontSize: 36,
   },
   emptyText: {
     color: theme.textMuted,
